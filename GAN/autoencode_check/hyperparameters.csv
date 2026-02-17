@@ -1,0 +1,20 @@
+AE_LR,0.0001
+BASE_DIR,GAN/autoencode_check
+BATCH_SIZE,8
+DATA_ROOT,data/images
+DDP,<class 'torch.nn.parallel.distributed.DistributedDataParallel'>
+DEVICE,cuda:1
+DIFF_LR,0.0001
+DIRS,"{'samples': 'samples', 'models': 'models'}"
+EPOCHS_AE,20
+EPOCHS_DIFF,50
+FATTY_DIR,data/images/fatty_liver
+IMG_SIZE,256
+KL_WEIGHT,1e-06
+LATENT_CHANNELS,4
+LATENT_SCALE,0.18215
+NORMAL_DIR,data/images/normal
+NUM_CLASSES,2
+RUN_NAME,autoencode_check
+SEED,42
+VAL_SPLIT,0.1

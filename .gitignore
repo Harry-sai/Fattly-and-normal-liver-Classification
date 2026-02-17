@@ -1,0 +1,16 @@
+# Ignore PyTorch model weights
+*.pth
+*.pt
+
+# Ignore data directory
+data/
+
+# Ignore models directory
+models/
+
+# Ignore debug input folders (e.g., debug_inputs, debug_inputs1, etc.)
+debug_inputs*/
+
+# Ignore augmentation debug folders (e.g., aug_debug, aug_debug_v2, etc.)
+aug_debug*/
+
