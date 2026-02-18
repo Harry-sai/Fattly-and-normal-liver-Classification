@@ -2,6 +2,7 @@
 *.pth
 *.pt
 
+
 # Ignore data directory
 data/
 
@@ -14,3 +15,5 @@ debug_inputs*/
 # Ignore augmentation debug folders (e.g., aug_debug, aug_debug_v2, etc.)
 aug_debug*/
 
+false_img/
+*.ipynb_checkpoints/

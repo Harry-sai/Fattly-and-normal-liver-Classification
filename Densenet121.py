@@ -30,7 +30,7 @@ import matplotlib.pyplot as plt
 # ============================================================
 IMAGES_ROOT = "data/images/"
 MASKS_ROOT  = "data/predictions_filled/"
-RESULTS_DIR = "results/densenet/check"
+RESULTS_DIR = "results/densenet/more_imgs"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 IMG_SIZE = 284

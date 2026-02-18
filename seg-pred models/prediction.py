@@ -12,9 +12,9 @@ from skimage.measure import label, regionprops
 # -------------------------
 # CONFIG (MATCH TRAINING)
 # -------------------------
-MODEL_PATH = "resnet34/hd95_higherepoch/best_unet_fold_5.pth"
-IMAGE_DIR  = "data/images"
-OUT_DIR    = "data/predictions_filled"
+MODEL_PATH = "../resnet34/hd95_highepco_check/best_unet_fold_6.pth"
+IMAGE_DIR  = "../data/Images_new"
+OUT_DIR    = "../data/predictions_new_fold6"
 
 IMG_SIZE = 384
 THRESH = 0.5
