@@ -1,0 +1,20 @@
+,value
+IMG_SIZE,284
+BATCH_SIZE,16
+EPOCHS,40
+LR,1e-05
+WEIGHT_DECAY,0.0001
+KFOLDS,5
+AUGMENTATIONS,"Compose([
+  Resize(p=1.0, area_for_downscale=None, height=284, interpolation=1, mask_interpolation=0, width=284),
+  HorizontalFlip(p=0.5),
+  Normalize(p=1.0, max_pixel_value=255.0, mean=(0.5,), normalization='standard', std=(0.25,)),
+  ToTensorV2(p=1.0, transpose_mask=False),
+], p=1.0, bbox_params=None, keypoint_params=None, additional_targets={}, is_check_shapes=True)"
+Model,Densenet121
+DROP_OUT,0.5
+OPTIMIZER,adam with Lr schedular
+LOSS,BCEWithLogitsLoss
+COMMENT,"removed freezing part , reduced lr and drop out lower and weight decay, increased 
+                
+            "

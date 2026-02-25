@@ -17,3 +17,6 @@ aug_debug*/
 
 false_img/
 *.ipynb_checkpoints/
+
+*images/
+*predictions_fixed/

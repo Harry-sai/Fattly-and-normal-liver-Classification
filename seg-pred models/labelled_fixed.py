@@ -13,8 +13,8 @@ from tqdm import tqdm
 # ------------------------------------------------------------
 # CONFIG (match your existing folder structure)
 # ------------------------------------------------------------
-INPUT_MASK_ROOT  = "data/labelled"          # your current manual masks
-OUTPUT_MASK_ROOT = "data/labelled_fixed"    # new cleaned masks
+INPUT_MASK_ROOT  = "data/predictions_more_imgs/normal"          # your current manual masks
+OUTPUT_MASK_ROOT = "Check/normal"    # new cleaned masks
 MASK_EXTENSIONS  = [".png", ".jpg", ".jpeg"]
 
 # ------------------------------------------------------------

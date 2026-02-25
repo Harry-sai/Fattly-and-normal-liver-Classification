@@ -1,5 +1,6 @@
 # ============================================================
-# Liver Classification 
+# Liver Classification with Stratified K-Fold Cross Validation
+# (CORRECTED + STABLE VERSION)
 # ============================================================
 
 import os
@@ -30,19 +31,19 @@ import matplotlib.pyplot as plt
 # ============================================================
 IMAGES_ROOT = "data/images/"
 MASKS_ROOT  = "data/masks/"
-RESULTS_DIR = "results/densenet/img768"
+RESULTS_DIR = "results/efficientnet/new"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 IMG_SIZE = 768
 BATCH_SIZE = 8
-EPOCHS = 40
-LR = 1e-5
+EPOCHS = 50
+LR = 3e-5
 WEIGHT_DECAY = 1e-4
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 KFOLDS = 5
 SEED = 42
 PATIENCE = 7
-DROP_OUT=0.5
+DROP_OUT=0.2
 # ============================================================
 # SEED
 # ============================================================
@@ -60,28 +61,15 @@ seed_everything(SEED)
 train_tfms = A.Compose([
     A.Resize(IMG_SIZE, IMG_SIZE),
     A.HorizontalFlip(p=0.5),
-    A.Affine(
-    translate_percent=0.10,
-    scale=(0.9, 1.1),
-    rotate=15,
-    border_mode=0,
-    p=0.4
-    ),
-    A.Normalize(mean=(0.5,), std=(0.25,)),
+    A.Normalize(mean=(0.0,), std=(1.0,)),
     ToTensorV2()
 ])
-
 
 val_tfms = A.Compose([
     A.Resize(IMG_SIZE, IMG_SIZE),
-    A.Normalize(mean=(0.5,), std=(0.25,)),
+    A.Normalize(mean=(0.0,), std=(1.0,)),
     ToTensorV2()
 ])
-
-# ============================================================
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-
 
 # -------------------------
 # Run configuration to save parameters
@@ -94,12 +82,12 @@ RUN_CONFIG = {
     "WEIGHT_DECAY": WEIGHT_DECAY,
     "KFOLDS": KFOLDS,
     "AUGMENTATIONS": str(train_tfms),
-    "Model": "Densenet121",
+    "Model": "EfficientNetB3",
     "DROP_OUT":DROP_OUT,
     "OPTIMIZER": "adam with Lr schedular",
     "LOSS": "BCEWithLogitsLoss",
-    "COMMENT":"""removed freezing part , reduced lr and drop out lower and weight decay, increased 
-                
+    "COMMENT":"""dropout dec and lr inc
+        
             """
 }
 
@@ -197,7 +185,6 @@ def collect_labeled_pairs(images_root, masks_root):
 samples = collect_labeled_pairs(IMAGES_ROOT, MASKS_ROOT)
 labels_all = [s[2] for s in samples]
 
-
 # ============================================================
 # STRATIFIED K-FOLD
 # ============================================================
@@ -226,7 +213,6 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(samples, labels_all), 1):
         ),
         batch_size=BATCH_SIZE,
         shuffle=True,
-        drop_last=True,
         num_workers=2
     )
 
@@ -238,31 +224,29 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(samples, labels_all), 1):
     )
 
 # ========================================================
-# MODEL (SINGLE CHANNEL Densenet121)
+# MODEL (SINGLE CHANNEL EFFICIENTNET)
 # ========================================================
-    model = models.densenet121(weights="IMAGENET1K_V1")
+    model = models.efficientnet_b3(weights="IMAGENET1K_V1")
     
-    # ---- change first conv layer to accept 1 channel ----
-    model.features.conv0 = nn.Conv2d(
-        1, 64, kernel_size=7, stride=2, padding=3, bias=False
+    # --- single-channel input ---
+    model.features[0][0] = nn.Conv2d(
+        1, 40, kernel_size=3, stride=2, padding=1, bias=False
     )
     
-    # ---- Freeze backbone (optional but recommended for small dataset) ----
     for param in model.features.parameters():
         param.requires_grad = False
     
-    # Unfreeze last dense block
-    for param in model.features.denseblock4.parameters():
+    for param in model.features[-1].parameters():  # last MBConv block
         param.requires_grad = True
 
-    in_features = model.classifier.in_features
+    in_features = model.classifier[1].in_features
     model.classifier = nn.Sequential(
         nn.Dropout(p=DROP_OUT),
         nn.Linear(in_features, 1)
     )
     
     model.to(DEVICE)
-    
+
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     
     optimizer = torch.optim.Adam(
@@ -275,6 +259,7 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(samples, labels_all), 1):
         optimizer, T_max=EPOCHS
     )
 
+
     best_auc = -1
     no_improve = 0
     history = []
@@ -283,7 +268,6 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(samples, labels_all), 1):
     # TRAINING LOOP
     # ========================================================
     for epoch in range(1, EPOCHS + 1):
-
         model.train()
         tr_preds, tr_gt, tr_loss = [], [], 0
 

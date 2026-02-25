@@ -1,0 +1,28 @@
+,value
+IMG_SIZE,284
+BATCH_SIZE,8
+EPOCHS,50
+LR,3e-05
+WEIGHT_DECAY,0.0005
+KFOLDS,5
+AUGMENTATIONS,"Compose([
+  Resize(p=1.0, area_for_downscale=None, height=284, interpolation=1, mask_interpolation=0, width=284),
+  HorizontalFlip(p=0.5),
+  Normalize(p=1.0, max_pixel_value=255.0, mean=(0.0,), normalization='standard', std=(1.0,)),
+  ToTensorV2(p=1.0, transpose_mask=False),
+], p=1.0, bbox_params=None, keypoint_params=None, additional_targets={}, is_check_shapes=True)"
+Model,EfficientNetB3
+DROP_OUT,0.2
+OPTIMIZER,adam with Lr schedular
+LOSS,BCEWithLogitsLoss
+COMMENT,"Lr increasing very little and tried reducing dropout as well 
+        
+     ###   Why graphs looks noisy
+
+    Even with ROC-optimized threshold:
+    Each epoch changes probability distribution slightly
+    Small dataset (≈260 images)
+    Fold validation size ≈50 images
+    1–2 sample flips = 2–4% accuracy jump
+        
+            "
