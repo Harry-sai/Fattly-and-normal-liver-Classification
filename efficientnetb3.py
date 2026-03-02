@@ -31,19 +31,20 @@ import matplotlib.pyplot as plt
 # ============================================================
 IMAGES_ROOT = "data/images/"
 MASKS_ROOT  = "data/masks/"
-RESULTS_DIR = "results/efficientnet/new"
+RESULTS_DIR = "results/efficientnet/Augm_prev"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-IMG_SIZE = 768
-BATCH_SIZE = 8
+IMG_SIZE = 512
+BATCH_SIZE = 16
 EPOCHS = 50
-LR = 3e-5
+LR = 1e-5
 WEIGHT_DECAY = 1e-4
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 KFOLDS = 5
 SEED = 42
 PATIENCE = 7
 DROP_OUT=0.2
+
 # ============================================================
 # SEED
 # ============================================================
@@ -64,6 +65,29 @@ train_tfms = A.Compose([
     A.Normalize(mean=(0.0,), std=(1.0,)),
     ToTensorV2()
 ])
+# train_tfms = A.Compose([
+#     A.Resize(IMG_SIZE, IMG_SIZE),
+
+#     A.HorizontalFlip(p=0.5),
+#     A.VerticalFlip(p=0.15),   # low probability
+
+#     A.Affine(
+#         translate_percent=0.05,
+#         scale=(0.95, 1.05),
+#         rotate=8,
+#         border_mode=0,
+#         p=0.4
+#     ),
+
+#     A.RandomBrightnessContrast(
+#         brightness_limit=0.05,
+#         contrast_limit=0.05,
+#         p=0.3
+#     ),
+
+#     A.Normalize(mean=(0.5,), std=(0.25,)),
+#     ToTensorV2()
+# ])
 
 val_tfms = A.Compose([
     A.Resize(IMG_SIZE, IMG_SIZE),
@@ -86,7 +110,7 @@ RUN_CONFIG = {
     "DROP_OUT":DROP_OUT,
     "OPTIMIZER": "adam with Lr schedular",
     "LOSS": "BCEWithLogitsLoss",
-    "COMMENT":"""dropout dec and lr inc
+    "COMMENT":"""redu lr and img size inc 
         
             """
 }

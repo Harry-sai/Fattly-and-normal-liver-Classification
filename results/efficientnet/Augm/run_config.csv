@@ -1,0 +1,23 @@
+,value
+IMG_SIZE,512
+BATCH_SIZE,8
+EPOCHS,50
+LR,1e-05
+WEIGHT_DECAY,0.0001
+KFOLDS,5
+AUGMENTATIONS,"Compose([
+  Resize(p=1.0, area_for_downscale=None, height=512, interpolation=1, mask_interpolation=0, width=512),
+  HorizontalFlip(p=0.5),
+  VerticalFlip(p=0.15),
+  Affine(p=0.4, balanced_scale=False, border_mode=0, fill=0.0, fill_mask=0.0, fit_output=False, interpolation=1, keep_ratio=False, mask_interpolation=0, rotate=(8.0, 8.0), rotate_method='largest_box', scale={'x': (0.95, 1.05), 'y': (0.95, 1.05)}, shear={'x': (0.0, 0.0), 'y': (0.0, 0.0)}, translate_percent={'x': (0.05, 0.05), 'y': (0.05, 0.05)}, translate_px=None),
+  RandomBrightnessContrast(p=0.3, brightness_by_max=True, brightness_limit=(-0.05, 0.05), contrast_limit=(-0.05, 0.05), ensure_safe_range=False),
+  Normalize(p=1.0, max_pixel_value=255.0, mean=(0.5,), normalization='standard', std=(0.25,)),
+  ToTensorV2(p=1.0, transpose_mask=False),
+], p=1.0, bbox_params=None, keypoint_params=None, additional_targets={}, is_check_shapes=True)"
+Model,EfficientNetB3
+DROP_OUT,0.2
+OPTIMIZER,adam with Lr schedular
+LOSS,BCEWithLogitsLoss
+COMMENT,"redu lr and img size inc 
+        
+            "

@@ -1,0 +1,20 @@
+,value
+IMG_SIZE,512
+BATCH_SIZE,16
+EPOCHS,60
+LR,0.00001
+WEIGHT_DECAY,0.00001
+KFOLDS,5
+AUGMENTATIONS,"Compose([
+  Resize(p=1.0, area_for_downscale=None, height=512, interpolation=1, mask_interpolation=0, width=512),
+  HorizontalFlip(p=0.5),
+  Normalize(p=1.0, max_pixel_value=255.0, mean=(0.5,), normalization='standard', std=(0.25,)),
+  ToTensorV2(p=1.0, transpose_mask=False),
+], p=1.0, bbox_params=None, keypoint_params=None, additional_targets={}, is_check_shapes=True)"
+Model,Densenet121
+DROP_OUT,0.5
+OPTIMIZER,adam with Lr schedular
+LOSS,BCEWithLogitsLoss
+COMMENT," image size increased to 512 and dropout inc to .5 , aug removed and than running 
+                
+            "

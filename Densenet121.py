@@ -30,15 +30,15 @@ import matplotlib.pyplot as plt
 # ============================================================
 IMAGES_ROOT = "data/images/"
 MASKS_ROOT  = "data/masks/"
-RESULTS_DIR = "results/densenet/img768"
+RESULTS_DIR = "results/densenet/Augm_lr"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-IMG_SIZE = 768
-BATCH_SIZE = 8
-EPOCHS = 40
+IMG_SIZE = 512
+BATCH_SIZE = 16
+EPOCHS = 60
 LR = 1e-5
 WEIGHT_DECAY = 1e-4
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 KFOLDS = 5
 SEED = 42
 PATIENCE = 7
@@ -59,17 +59,28 @@ seed_everything(SEED)
 # ============================================================
 train_tfms = A.Compose([
     A.Resize(IMG_SIZE, IMG_SIZE),
+
     A.HorizontalFlip(p=0.5),
+    A.VerticalFlip(p=0.15),   # low probability
+
     A.Affine(
-    translate_percent=0.10,
-    scale=(0.9, 1.1),
-    rotate=15,
-    border_mode=0,
-    p=0.4
+        translate_percent=0.05,
+        scale=(0.95, 1.05),
+        rotate=8,
+        border_mode=0,
+        p=0.4
     ),
+
+    A.RandomBrightnessContrast(
+        brightness_limit=0.05,
+        contrast_limit=0.05,
+        p=0.3
+    ),
+
     A.Normalize(mean=(0.5,), std=(0.25,)),
     ToTensorV2()
 ])
+
 
 
 val_tfms = A.Compose([
@@ -98,8 +109,7 @@ RUN_CONFIG = {
     "DROP_OUT":DROP_OUT,
     "OPTIMIZER": "adam with Lr schedular",
     "LOSS": "BCEWithLogitsLoss",
-    "COMMENT":"""removed freezing part , reduced lr and drop out lower and weight decay, increased 
-                
+    "COMMENT":""" augmentatation vertical flip changed a little , lr of 1e-4 did not work so back to -5
             """
 }
 
@@ -250,20 +260,28 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(samples, labels_all), 1):
     # ---- Freeze backbone (optional but recommended for small dataset) ----
     for param in model.features.parameters():
         param.requires_grad = False
+
+    # for param in model.features.denseblock2.parameters():
+    #     param.requires_grad = True
     
-    # Unfreeze last dense block
-    for param in model.features.denseblock4.parameters():
-        param.requires_grad = True
+    # for param in model.features.denseblock3.parameters():
+    #     param.requires_grad = True
+    
+    # for param in model.features.denseblock4.parameters():
+    #     param.requires_grad = True
 
     in_features = model.classifier.in_features
     model.classifier = nn.Sequential(
-        nn.Dropout(p=DROP_OUT),
-        nn.Linear(in_features, 1)
+        nn.Linear(in_features, 512),
+        nn.BatchNorm1d(512),
+        nn.ReLU(),
+        nn.Dropout(DROP_OUT),
+        nn.Linear(512, 1)
     )
     
     model.to(DEVICE)
     
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    criterion = nn.BCEWithLogitsLoss()
     
     optimizer = torch.optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()),

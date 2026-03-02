@@ -2,7 +2,7 @@
 IMG_SIZE,284
 BATCH_SIZE,8
 EPOCHS,60
-LR,3e-05
+LR,0.00003
 WEIGHT_DECAY,0.0005
 KFOLDS,5
 AUGMENTATIONS,"Compose([
@@ -11,7 +11,7 @@ AUGMENTATIONS,"Compose([
   Normalize(p=1.0, max_pixel_value=255.0, mean=(0.0,), normalization='standard', std=(1.0,)),
   ToTensorV2(p=1.0, transpose_mask=False),
 ], p=1.0, bbox_params=None, keypoint_params=None, additional_targets={}, is_check_shapes=True)"
-Model,EfficientNetB3
+Model,DenseNet121
 DROP_OUT,0.2
 OPTIMIZER,adam with Lr schedular
 LOSS,BCEWithLogitsLoss
