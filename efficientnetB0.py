@@ -31,15 +31,16 @@ import matplotlib.pyplot as plt
 # ============================================================
 IMAGES_ROOT = "data/images/"
 MASKS_ROOT  = "data/masks/"
-RESULTS_DIR = "results/efficientnetB0/batch"
+RESULTS_DIR = "results/efficientnetB0/Check"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-IMG_SIZE = 512
-BATCH_SIZE = 16
+IMG_SIZE = 224
+BATCH_SIZE = 8
 EPOCHS = 40
-LR = 1e-4
+LR = 3e-4
 WEIGHT_DECAY = 5e-4
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(DEVICE)
 KFOLDS = 5
 SEED = 42
 PATIENCE = 7
@@ -110,7 +111,7 @@ RUN_CONFIG = {
     "DROP_OUT":DROP_OUT,
     "OPTIMIZER": "adam with Lr schedular",
     "LOSS": "BCEWithLogitsLoss",
-    "COMMENT":"""new model 
+    "COMMENT":"""reduced image size back to 224 and batch size to 8 
         
             """
 }

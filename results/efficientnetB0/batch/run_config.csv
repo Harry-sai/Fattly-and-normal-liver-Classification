@@ -1,0 +1,20 @@
+,value
+IMG_SIZE,224
+BATCH_SIZE,8
+EPOCHS,40
+LR,0.0003
+WEIGHT_DECAY,0.0005
+KFOLDS,5
+AUGMENTATIONS,"Compose([
+  Resize(p=1.0, area_for_downscale=None, height=224, interpolation=1, mask_interpolation=0, width=224),
+  HorizontalFlip(p=0.5),
+  Normalize(p=1.0, max_pixel_value=255.0, mean=(0.0,), normalization='standard', std=(1.0,)),
+  ToTensorV2(p=1.0, transpose_mask=False),
+], p=1.0, bbox_params=None, keypoint_params=None, additional_targets={}, is_check_shapes=True)"
+Model,EfficientNetB0
+DROP_OUT,0.3
+OPTIMIZER,adam with Lr schedular
+LOSS,BCEWithLogitsLoss
+COMMENT,"reduced image size back to 224 and batch size to 8 
+        
+            "

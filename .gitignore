@@ -20,3 +20,14 @@ false_img/
 
 *images/
 *predictions_fixed/
+
+# Ignore image files
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.svg
+*.webp
+*.ico
