@@ -1,9 +1,9 @@
 AE_LR,5e-05
-BASE_DIR,GAN/liver_gan_run
+BASE_DIR,GAN/liver_gan_updated
 BATCH_SIZE,2
 DATA_ROOT,data/images
 DDP,<class 'torch.nn.parallel.distributed.DistributedDataParallel'>
-DEVICE,cuda:1
+DEVICE,cuda:0
 DIFF_LR,5e-05
 DIRS,"{'samples': 'samples', 'models': 'models'}"
 EPOCHS_AE,50
@@ -16,6 +16,6 @@ LATENT_SCALE,0.18215
 MASKS_ROOT,data/masks
 NORMAL_DIR,data/images/normal
 NUM_CLASSES,2
-RUN_NAME,liver_gan_run
+RUN_NAME,liver_gan_updated
 SEED,42
 VAL_SPLIT,0.1

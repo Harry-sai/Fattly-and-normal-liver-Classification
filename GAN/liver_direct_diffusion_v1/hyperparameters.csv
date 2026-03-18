@@ -1,0 +1,29 @@
+ACCUM_STEPS,1
+AMP,True
+BASE_DIR,GAN/liver_direct_diffusion_v1
+BATCH_SIZE,8
+CFG_DROPOUT,0.1
+DATA_ROOT,data/images
+DDP,<class 'torch.nn.parallel.distributed.DistributedDataParallel'>
+DEVICE,cuda:0
+DIRS,"{'samples': 'samples', 'models': 'models'}"
+EMA_DECAY,0.999
+EPOCHS,250
+GRAD_CLIP,1.0
+GUIDANCE_SCALE,3.5
+IMG_SIZE,128
+IS_DDP,True
+LOCAL_RANK,0
+LR,0.0002
+MASKS_ROOT,data/masks
+NUM_CLASSES,2
+NUM_WORKERS,2
+RANK,0
+RUN_NAME,liver_direct_diffusion_v1
+SAMPLE_STEPS,100
+SEED,42
+TIMESTEPS,1000
+USE_CUDA,True
+VAL_SPLIT,0.1
+WEIGHT_DECAY,0.0001
+WORLD_SIZE,2

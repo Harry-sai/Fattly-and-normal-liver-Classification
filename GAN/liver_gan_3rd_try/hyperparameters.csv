@@ -1,21 +1,21 @@
-AE_LR,5e-05
-BASE_DIR,GAN/liver_gan_run
-BATCH_SIZE,2
+AE_LR,0.0001
+BASE_DIR,GAN/liver_gan_3rd_try
+BATCH_SIZE,4
 DATA_ROOT,data/images
 DDP,<class 'torch.nn.parallel.distributed.DistributedDataParallel'>
-DEVICE,cuda:1
-DIFF_LR,5e-05
+DEVICE,cuda:0
+DIFF_LR,0.0001
 DIRS,"{'samples': 'samples', 'models': 'models'}"
 EPOCHS_AE,50
 EPOCHS_DIFF,100
 FATTY_DIR,data/images/fatty_liver
 IMG_SIZE,256
-KL_WEIGHT,1e-05
-LATENT_CHANNELS,16
+KL_WEIGHT,1e-07
+LATENT_CHANNELS,4
 LATENT_SCALE,0.18215
 MASKS_ROOT,data/masks
 NORMAL_DIR,data/images/normal
 NUM_CLASSES,2
-RUN_NAME,liver_gan_run
+RUN_NAME,liver_gan_3rd_try
 SEED,42
 VAL_SPLIT,0.1

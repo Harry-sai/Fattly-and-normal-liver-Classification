@@ -45,7 +45,7 @@ MASKS_ROOT = "data/masks"          # path where binary liver masks are stored
 NORMAL_DIR = os.path.join(DATA_ROOT, "normal")
 FATTY_DIR = os.path.join(DATA_ROOT, "fatty_liver")
 
-RUN_NAME = "liver_gan_run"
+RUN_NAME = "liver_gan_5th"
 BASE_DIR = os.path.join("GAN", RUN_NAME)
 DIRS = {
     "samples": "samples",
@@ -69,14 +69,14 @@ os.environ["MKL_NUM_THREADS"] = "1"
 # HYPERPARAMETERS
 # -------------------------
 IMG_SIZE = 256
-BATCH_SIZE = 4  # Reduced batch size to fit in memory
-LATENT_CHANNELS = 8  # Increased for better latent representation
-LATENT_SCALE = 0.18215
-AE_LR = 5e-5  # Slightly lower LR for stability
-DIFF_LR = 5e-5
-KL_WEIGHT = 1e-5  # Increased KL weight for better reconstruction
-EPOCHS_AE = 50  # Increased epochs for better training
-EPOCHS_DIFF = 100  # Increased epochs for diffusion
+BATCH_SIZE = 2
+LATENT_CHANNELS = 8
+LATENT_SCALE = None  # computed after AE training from data
+AE_LR = 1e-4
+DIFF_LR = 2e-4  # higher LR for diffusion (small batch size)
+KL_WEIGHT = 1e-6
+EPOCHS_AE = 50
+EPOCHS_DIFF = 150  # more epochs for diffusion convergence
 NUM_CLASSES = 2
 VAL_SPLIT = 0.1
 
@@ -113,7 +113,7 @@ def collect_labeled_pairs(images_root, masks_root):
     return pairs
 
 # simple dataset that loads image+mask, crops to mask bounding box (ROI), resizes
-def make_roi(img, mask):
+def make_roi(img, mask, pad=4):
     # both numpy arrays, single channel
     if mask.shape != img.shape:
         mask = np.array(
@@ -125,6 +125,13 @@ def make_roi(img, mask):
         raise RuntimeError("Empty mask encountered")
     y1, y2 = ys.min(), ys.max()
     x1, x2 = xs.min(), xs.max()
+
+    # minimal padding to preserve signal
+    y1 = max(y1 - pad, 0)
+    y2 = min(y2 + pad, img.shape[0])
+    x1 = max(x1 - pad, 0)
+    x2 = min(x2 + pad, img.shape[1])
+
     roi = img[y1:y2, x1:x2]
     return roi
 
@@ -143,7 +150,9 @@ class LiverROIDataset(torch.utils.data.Dataset):
         roi = make_roi(img, mask)
         # resize to fixed input size
         roi = np.array(Image.fromarray(roi).resize((self.img_size, self.img_size)))
+        # scale to [-1, 1] for AutoencoderKL stability
         roi = roi.astype(np.float32) / 255.0
+        roi = roi * 2.0 - 1.0
         tensor = torch.from_numpy(roi).unsqueeze(0)
         label = torch.tensor(label, dtype=torch.long)
         return tensor, label
@@ -185,13 +194,14 @@ val_loader = DataLoader(
 # -------------------------
 # AUTOENCODER (STAGE 1)
 # -------------------------
+# Use a lighter, more stable AE for small batches
 autoencoder = AutoencoderKL(
     spatial_dims=2,
     in_channels=1,
     out_channels=1,
-    channels=(128, 256, 512, 512),  # Reduced to fit memory
+    channels=(64, 128, 256, 256),
     latent_channels=LATENT_CHANNELS,
-    num_res_blocks=2,  # Back to 2
+    num_res_blocks=2,
     norm_num_groups=32,
 ).to(DEVICE)
 
@@ -251,17 +261,33 @@ if dist.get_rank() == 0:
     plt.figure(figsize=(8,4))
     plt.subplot(1,2,1)
     plt.title("Original")
-    plt.imshow(x[0,0].cpu(), cmap="gray")
+    # map back to [0, 1] for visualization
+    plt.imshow(((x[0,0].cpu() + 1.0) / 2.0).clamp(0, 1), cmap="gray")
     plt.axis("off")
     
     plt.subplot(1,2,2)
     plt.title("Reconstruction")
-    plt.imshow(recon[0,0].cpu(), cmap="gray")
+    plt.imshow(((recon[0,0].cpu() + 1.0) / 2.0).clamp(0, 1), cmap="gray")
     plt.axis("off")
     plt.savefig(os.path.join(BASE_DIR, "Ae_curve.png"))
     plt.close()
-    
-    plt.show()
+
+# estimate latent scale to normalize z (like Stable Diffusion), but based on this AE
+@torch.no_grad()
+def estimate_latent_scale(loader, num_batches=20):
+    stds = []
+    for i, (x, _) in enumerate(loader):
+        if i >= num_batches:
+            break
+        x = x.to(DEVICE)
+        z_mu, _ = autoencoder.module.encode(x)
+        stds.append(z_mu.std().item())
+    mean_std = float(np.mean(stds)) if stds else 1.0
+    return 1.0 / max(mean_std, 1e-6)
+
+LATENT_SCALE = estimate_latent_scale(train_loader)
+if dist.get_rank() == 0:
+    print(f"Estimated LATENT_SCALE: {LATENT_SCALE:.5f}")
 
 # -------------------------
 # DIFFUSION MODEL (STAGE 2)
@@ -270,9 +296,9 @@ diffusion = DiffusionModelUNet(
     spatial_dims=2,
     in_channels=LATENT_CHANNELS,
     out_channels=LATENT_CHANNELS,
-    channels=(128, 256, 512, 512),  # Reduced to fit memory
-    attention_levels=(False, False, True, True),
-    num_res_blocks=2,  # Back to 2
+    channels=(128, 256, 512, 512),
+    attention_levels=(False, True, True, True),
+    num_res_blocks=2,
     with_conditioning=True,
     cross_attention_dim=128,
 ).to(DEVICE)
@@ -309,7 +335,6 @@ def diff_epoch(loader, train=True):
         cond = class_embed(y).unsqueeze(1)
         pred = diffusion(zn, t, cond)
         loss = mse(pred, noise)
-        loss = mse(pred, noise)
         if train:
             diff_opt.zero_grad()
             loss.backward()
@@ -323,6 +348,35 @@ def diff_epoch(loader, train=True):
 
     return total / len(loader)
 
+# -------------------------
+# SAMPLE GENERATION HELPERS
+# -------------------------
+from torchvision.utils import save_image
+
+@torch.no_grad()
+def generate(label, idx, filename=None):
+    z = torch.randn(1, LATENT_CHANNELS, IMG_SIZE//16, IMG_SIZE//16).to(DEVICE)
+    y = torch.tensor([label], device=DEVICE)
+    cond = class_embed(y).unsqueeze(1)
+    ddim.set_timesteps(100)
+    for t in ddim.timesteps:
+        t_batch = torch.full((z.size(0),), t, device=DEVICE, dtype=torch.long)
+        eps = diffusion.module(z, t_batch, cond)
+        z, _ = ddim.step(eps, t, z)
+    z = z / LATENT_SCALE
+    z = torch.clamp(z, -10.0, 10.0)
+    img = autoencoder.module.decode(z)
+    img = ((img + 1.0) / 2.0).clamp(0, 1)
+    out_name = filename or f"{'normal' if label==0 else 'fatty'}_{idx}.png"
+    save_image(img.cpu(), os.path.join(BASE_DIR, "samples", out_name))
+
+@torch.no_grad()
+def save_epoch_samples(epoch_idx):
+    # fixed seed so you see the same latents improving over epochs
+    torch.manual_seed(SEED)
+    generate(0, epoch_idx, filename="latest_normal.png")
+    generate(1, epoch_idx, filename="latest_fatty.png")
+
 for e in range(EPOCHS_DIFF):
     train_sampler.set_epoch(e)
     tr = diff_epoch(train_loader, True)
@@ -331,12 +385,17 @@ for e in range(EPOCHS_DIFF):
     diff_val_losses.append(vl)
     if dist.get_rank() == 0:
         print(f"[DIFF] Epoch {e+1}/{EPOCHS_DIFF} | Train: {tr:.4f} | Val: {vl:.4f}")
+        save_epoch_samples(e + 1)
     if vl < best_val_loss:
         best_val_loss = vl
         if dist.get_rank() == 0:
             torch.save(
                 diffusion.module.state_dict(),
                 os.path.join(BASE_DIR, "models", "diffusion.pt")
+            )
+            torch.save(
+                class_embed.state_dict(),
+                os.path.join(BASE_DIR, "models", "class_embed.pt")
             )
             torch.save(
                 autoencoder.module.state_dict(),
@@ -361,39 +420,9 @@ if dist.get_rank() == 0:
     plt.savefig(os.path.join(BASE_DIR, "loss_curves.png"))
     plt.close()
 
-# -------------------------
-# SANITY-CHECK GENERATION
-# -------------------------
-from torchvision.utils import save_image
-
-@torch.no_grad()
-def generate(label, idx):
-    z = torch.randn(1, LATENT_CHANNELS, IMG_SIZE//16, IMG_SIZE//16).to(DEVICE)
-    y = torch.tensor([label], device=DEVICE)
-    cond = class_embed(y).unsqueeze(1)
-    ddim.set_timesteps(100)  # Increased timesteps for better generation quality
-    for t in ddim.timesteps:
-        t_batch = torch.full(
-            (z.size(0),), t, device=DEVICE, dtype=torch.long
-        )
-        eps = diffusion.module(z, t_batch, cond)
-        z, _ = ddim.step(eps, t, z)
-        
-    z = z / LATENT_SCALE
-    img = autoencoder.module.decode(z).clamp(0,1)
-    save_image(
-        img.cpu(),
-        os.path.join(
-            BASE_DIR,
-            "samples",
-            f"{'normal' if label==0 else 'fatty'}_{idx}.png"
-        )
-    )
-
 if dist.get_rank() == 0:
     for i in range(5):
         generate(0, i)
         generate(1, i)
 
 dist.destroy_process_group()
-
