@@ -4,7 +4,6 @@
 # =========================================================
 
 import os
-import glob
 import csv
 import random
 import torch
@@ -16,11 +15,6 @@ from torch.utils.data import DataLoader, random_split
 from pathlib import Path
 from PIL import Image
 
-from monai.data import Dataset
-from monai.transforms import (
-    Compose,LoadImaged,EnsureChannelFirstd,
-    ScaleIntensityd,Resized,ToTensord
-)
 from monai.networks.nets import AutoencoderKL, DiffusionModelUNet
 from monai.networks.schedulers import DDPMScheduler, DDIMScheduler
 import torch.distributed as dist
@@ -45,7 +39,7 @@ MASKS_ROOT = "data/masks"          # path where binary liver masks are stored
 NORMAL_DIR = os.path.join(DATA_ROOT, "normal")
 FATTY_DIR = os.path.join(DATA_ROOT, "fatty_liver")
 
-RUN_NAME = "liver_gan_5th"
+RUN_NAME = "liver_gan_new27"
 BASE_DIR = os.path.join("GAN", RUN_NAME)
 DIRS = {
     "samples": "samples",
@@ -72,9 +66,11 @@ IMG_SIZE = 256
 BATCH_SIZE = 2
 LATENT_CHANNELS = 8
 LATENT_SCALE = None  # computed after AE training from data
+LATENT_SHAPE = None  # inferred from the trained AE encoder
 AE_LR = 1e-4
 DIFF_LR = 2e-4  # higher LR for diffusion (small batch size)
 KL_WEIGHT = 1e-6
+EDGE_WEIGHT = 0.15
 EPOCHS_AE = 50
 EPOCHS_DIFF = 150  # more epochs for diffusion convergence
 NUM_CLASSES = 2
@@ -96,12 +92,12 @@ def collect_labeled_pairs(images_root, masks_root):
 
     pairs = []
     mask_lookup = {}
-    for m in masks_root.rglob("*.PNG"):
+    for m in list(masks_root.rglob("*.PNG")) + list(masks_root.rglob("*.png")):
         cls = m.parent.name.lower()
         if cls in ["normal", "fatty_liver"]:
             mask_lookup[(cls, m.stem.lower())] = m
 
-    for img in images_root.rglob("*.PNG"):
+    for img in list(images_root.rglob("*.PNG")) + list(images_root.rglob("*.png")):
         cls = img.parent.name.lower()
         if cls in ["normal", "fatty_liver"]:
             key = (cls, img.stem.lower())
@@ -112,28 +108,52 @@ def collect_labeled_pairs(images_root, masks_root):
     print("Total samples:", len(pairs))
     return pairs
 
-# simple dataset that loads image+mask, crops to mask bounding box (ROI), resizes
-def make_roi(img, mask, pad=4):
+# simple dataset that loads image+mask, crops to a square liver ROI, resizes
+def robust_normalize(image):
+    lo, hi = np.percentile(image, [1.0, 99.0])
+    if hi - lo < 1e-6:
+        image = np.clip(image / 255.0, 0.0, 1.0)
+    else:
+        image = np.clip((image - lo) / (hi - lo), 0.0, 1.0)
+    return image.astype(np.float32)
+
+
+def square_crop_from_mask(img, mask, pad_ratio=0.18):
     # both numpy arrays, single channel
     if mask.shape != img.shape:
         mask = np.array(
             Image.fromarray(mask).resize((img.shape[1], img.shape[0]), resample=Image.NEAREST)
         )
+
     mask = (mask > 127).astype(np.uint8)
     ys, xs = np.where(mask > 0)
     if len(xs) == 0:
-        raise RuntimeError("Empty mask encountered")
+        side = min(img.shape[0], img.shape[1])
+        y1 = max(0, (img.shape[0] - side) // 2)
+        x1 = max(0, (img.shape[1] - side) // 2)
+        return (
+            img[y1:y1 + side, x1:x1 + side],
+            mask[y1:y1 + side, x1:x1 + side],
+        )
+
     y1, y2 = ys.min(), ys.max()
     x1, x2 = xs.min(), xs.max()
 
-    # minimal padding to preserve signal
-    y1 = max(y1 - pad, 0)
-    y2 = min(y2 + pad, img.shape[0])
-    x1 = max(x1 - pad, 0)
-    x2 = min(x2 + pad, img.shape[1])
+    box_h = y2 - y1 + 1
+    box_w = x2 - x1 + 1
+    side = int(max(box_h, box_w) * (1.0 + 2.0 * pad_ratio))
+    side = max(32, min(side, max(img.shape[0], img.shape[1])))
 
-    roi = img[y1:y2, x1:x2]
-    return roi
+    cy = 0.5 * (y1 + y2)
+    cx = 0.5 * (x1 + x2)
+    y1 = int(round(cy - side / 2))
+    x1 = int(round(cx - side / 2))
+    y1 = max(0, min(y1, img.shape[0] - side))
+    x1 = max(0, min(x1, img.shape[1] - side))
+    y2 = y1 + side
+    x2 = x1 + side
+
+    return img[y1:y2, x1:x2], mask[y1:y2, x1:x2]
 
 class LiverROIDataset(torch.utils.data.Dataset):
     def __init__(self, pairs, img_size):
@@ -147,11 +167,22 @@ class LiverROIDataset(torch.utils.data.Dataset):
         img_path, mask_path, label = self.pairs[idx]
         img = np.array(Image.open(img_path).convert("L"))
         mask = np.array(Image.open(mask_path).convert("L"))
-        roi = make_roi(img, mask)
+        roi, roi_mask = square_crop_from_mask(img, mask)
         # resize to fixed input size
-        roi = np.array(Image.fromarray(roi).resize((self.img_size, self.img_size)))
+        roi = np.array(
+            Image.fromarray(roi).resize((self.img_size, self.img_size), resample=Image.BICUBIC)
+        )
+        roi_mask = np.array(
+            Image.fromarray((roi_mask * 255).astype(np.uint8)).resize(
+                (self.img_size, self.img_size), resample=Image.NEAREST
+            )
+        ).astype(np.float32)
+        roi_mask = (roi_mask > 127).astype(np.float32)
+        # Percentile normalization makes the AE see more consistent liver contrast.
+        roi = robust_normalize(roi)
+        # Keep the model focused on the liver instead of learning background/body-wall textures.
+        roi = roi * roi_mask
         # scale to [-1, 1] for AutoencoderKL stability
-        roi = roi.astype(np.float32) / 255.0
         roi = roi * 2.0 - 1.0
         tensor = torch.from_numpy(roi).unsqueeze(0)
         label = torch.tensor(label, dtype=torch.long)
@@ -169,8 +200,12 @@ full_dataset = LiverROIDataset(pairs, IMG_SIZE)
 
 
 val_len = int(len(full_dataset) * VAL_SPLIT)
+if len(full_dataset) > 1:
+    val_len = max(1, val_len)
+val_len = min(val_len, max(len(full_dataset) - 1, 0))
 train_len = len(full_dataset) - val_len
-train_ds, val_ds = random_split(full_dataset, [train_len, val_len])
+split_generator = torch.Generator().manual_seed(SEED)
+train_ds, val_ds = random_split(full_dataset, [train_len, val_len], generator=split_generator)
 
 train_sampler = DistributedSampler(train_ds)
 val_sampler = DistributedSampler(val_ds, shuffle=False)
@@ -212,6 +247,23 @@ l1 = nn.L1Loss()
 
 ae_train_losses, ae_val_losses = [], []
 
+
+def sobel_edges(x):
+    kernel_x = torch.tensor(
+        [[-1.0, 0.0, 1.0], [-2.0, 0.0, 2.0], [-1.0, 0.0, 1.0]],
+        device=x.device,
+        dtype=x.dtype,
+    ).view(1, 1, 3, 3)
+    kernel_y = torch.tensor(
+        [[-1.0, -2.0, -1.0], [0.0, 0.0, 0.0], [1.0, 2.0, 1.0]],
+        device=x.device,
+        dtype=x.dtype,
+    ).view(1, 1, 3, 3)
+    gx = torch.nn.functional.conv2d(x, kernel_x, padding=1)
+    gy = torch.nn.functional.conv2d(x, kernel_y, padding=1)
+    return torch.sqrt(gx.square() + gy.square() + 1e-6)
+
+
 def ae_epoch(loader, train=True):
     autoencoder.train(train)
     total = 0.0
@@ -219,10 +271,11 @@ def ae_epoch(loader, train=True):
         x = x.to(DEVICE)
         recon, mu, sigma = autoencoder(x)
         rec = l1(recon, x)
+        edge = l1(sobel_edges(recon), sobel_edges(x))
         kl = torch.mean(-0.5 * torch.sum(
             1 + torch.log(sigma**2) - mu**2 - sigma**2, dim=[1,2,3]
         ))
-        loss = rec + KL_WEIGHT * kl
+        loss = rec + EDGE_WEIGHT * edge + KL_WEIGHT * kl
         if train:
             ae_opt.zero_grad()
             loss.backward()
@@ -285,9 +338,20 @@ def estimate_latent_scale(loader, num_batches=20):
     mean_std = float(np.mean(stds)) if stds else 1.0
     return 1.0 / max(mean_std, 1e-6)
 
+
+@torch.no_grad()
+def estimate_latent_shape(loader):
+    x, _ = next(iter(loader))
+    x = x.to(DEVICE)
+    z_mu, _ = autoencoder.module.encode(x[:1])
+    return tuple(z_mu.shape[1:])
+
+
 LATENT_SCALE = estimate_latent_scale(train_loader)
+LATENT_SHAPE = estimate_latent_shape(train_loader)
 if dist.get_rank() == 0:
     print(f"Estimated LATENT_SCALE: {LATENT_SCALE:.5f}")
+    print(f"Estimated LATENT_SHAPE: {LATENT_SHAPE}")
 
 # -------------------------
 # DIFFUSION MODEL (STAGE 2)
@@ -322,6 +386,7 @@ best_val_loss = float("inf")
 
 def diff_epoch(loader, train=True):
     diffusion.train(train)
+    class_embed.train(train)
     total = 0.0
     for x, y in loader:
         x = x.to(DEVICE)
@@ -338,6 +403,9 @@ def diff_epoch(loader, train=True):
         if train:
             diff_opt.zero_grad()
             loss.backward()
+            if dist.get_world_size() > 1 and class_embed.weight.grad is not None:
+                dist.all_reduce(class_embed.weight.grad, op=dist.ReduceOp.SUM)
+                class_embed.weight.grad /= dist.get_world_size()
             torch.nn.utils.clip_grad_norm_(diffusion.parameters(), 1.0)
             diff_opt.step()
 
@@ -355,7 +423,9 @@ from torchvision.utils import save_image
 
 @torch.no_grad()
 def generate(label, idx, filename=None):
-    z = torch.randn(1, LATENT_CHANNELS, IMG_SIZE//16, IMG_SIZE//16).to(DEVICE)
+    if LATENT_SHAPE is None:
+        raise RuntimeError("LATENT_SHAPE must be estimated before sample generation.")
+    z = torch.randn(1, *LATENT_SHAPE, device=DEVICE)
     y = torch.tensor([label], device=DEVICE)
     cond = class_embed(y).unsqueeze(1)
     ddim.set_timesteps(100)
