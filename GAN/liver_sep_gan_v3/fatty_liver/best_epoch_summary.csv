@@ -1,0 +1,7 @@
+best_epoch,112
+best_val_score,1.073081
+hist_l1,0.309590
+mean_diff,0.005769
+std_diff,0.004715
+edge_diff,0.076023
+lap_var_diff,0.012296

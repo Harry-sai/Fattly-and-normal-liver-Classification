@@ -1,0 +1,2 @@
+epoch,g_total,g_adv,g_recon,g_fm,g_tv,d_loss,val_l1,val_edge,val_ssim,val_score
+1,19.929636,0.043319,19.342957,0.252052,0.661136,2.162981,0.460482,1.310870,0.026871,1.892415
