@@ -57,13 +57,24 @@ def parse_args():
     parser.add_argument("--noise-ch", type=int, default=8)
     parser.add_argument("--lambda-bg", type=float, default=2.0)
     parser.add_argument("--normal-lambda-l1", type=float, default=24.0)
-    parser.add_argument("--normal-lambda-edge", type=float, default=5.0)
-    parser.add_argument("--normal-lambda-fm", type=float, default=1.5)
-    parser.add_argument("--normal-lambda-tv", type=float, default=0.25)
+    parser.add_argument("--normal-lambda-edge", type=float, default=5.5)
+    parser.add_argument("--normal-lambda-fm", type=float, default=1.25)
+    parser.add_argument("--normal-lambda-tv", type=float, default=0.22)
+    parser.add_argument("--normal-lambda-lap", type=float, default=1.9)
+    parser.add_argument("--normal-lambda-ms", type=float, default=0.18)
+    parser.add_argument("--normal-lambda-stats", type=float, default=1.6)
+    parser.add_argument("--normal-lambda-texstats", type=float, default=1.35)
     parser.add_argument("--fatty-lambda-l1", type=float, default=18.0)
-    parser.add_argument("--fatty-lambda-edge", type=float, default=6.0)
-    parser.add_argument("--fatty-lambda-fm", type=float, default=4.0)
-    parser.add_argument("--fatty-lambda-tv", type=float, default=0.08)
+    parser.add_argument("--fatty-lambda-edge", type=float, default=7.5)
+    parser.add_argument("--fatty-lambda-fm", type=float, default=2.2)
+    parser.add_argument("--fatty-lambda-tv", type=float, default=0.02)
+    parser.add_argument("--fatty-lambda-lap", type=float, default=2.0)
+    parser.add_argument("--fatty-lambda-ms", type=float, default=0.06)
+    parser.add_argument("--fatty-lambda-stats", type=float, default=2.4)
+    parser.add_argument("--fatty-lambda-texstats", type=float, default=1.6)
+    parser.add_argument("--save-top-k", type=int, default=3)
+    parser.add_argument("--save-warmup-epochs", type=int, default=20)
+    parser.add_argument("--min-save-improvement", type=float, default=0.005)
     parser.add_argument("--sample-every", type=int, default=5)
     parser.add_argument("--preview-count", type=int, default=4)
     parser.add_argument("--hflip-aug", action="store_true")
@@ -231,7 +242,7 @@ def maybe_augment_batch(images, masks, enabled=False):
 def conv_block(in_ch, out_ch, stride=2, norm=True):
     layers = [nn.Conv2d(in_ch, out_ch, kernel_size=4, stride=stride, padding=1, bias=not norm)]
     if norm:
-        layers.append(nn.BatchNorm2d(out_ch))
+        layers.append(nn.InstanceNorm2d(out_ch, affine=True))
     layers.append(nn.LeakyReLU(0.2, inplace=False))
     return nn.Sequential(*layers)
 
@@ -244,10 +255,20 @@ def disc_conv_block(in_ch, out_ch, stride=2, norm=True):
     return nn.Sequential(*layers)
 
 
+def minibatch_stddev(x, eps=1e-6):
+    if x.size(0) == 1:
+        stddev = x.new_zeros(1, 1, x.size(2), x.size(3))
+    else:
+        stddev = torch.sqrt(x.var(dim=0, unbiased=False, keepdim=True) + eps)
+        stddev = stddev.mean(dim=1, keepdim=True)
+        stddev = stddev.expand(x.size(0), -1, x.size(2), x.size(3))
+    return torch.cat([x, stddev], dim=1)
+
+
 def deconv_block(in_ch, out_ch, dropout=0.0):
     layers = [
         nn.ConvTranspose2d(in_ch, out_ch, kernel_size=4, stride=2, padding=1, bias=False),
-        nn.BatchNorm2d(out_ch),
+        nn.InstanceNorm2d(out_ch, affine=True),
         nn.ReLU(inplace=False),
     ]
     if dropout > 0.0:
@@ -258,7 +279,7 @@ def deconv_block(in_ch, out_ch, dropout=0.0):
 class Generator(nn.Module):
     def __init__(self, noise_ch=8, base_ch=64):
         super().__init__()
-        in_ch = 1 + noise_ch
+        in_ch = 5
         self.noise_ch = noise_ch
 
         self.e1 = conv_block(in_ch, base_ch, norm=False)
@@ -266,10 +287,15 @@ class Generator(nn.Module):
         self.e3 = conv_block(base_ch * 2, base_ch * 4)
         self.e4 = conv_block(base_ch * 4, base_ch * 8)
         self.e5 = conv_block(base_ch * 8, base_ch * 8)
+        self.latent_proj = nn.Sequential(
+            nn.Linear(noise_ch, base_ch * 8),
+            nn.LeakyReLU(0.2, inplace=False),
+            nn.Linear(base_ch * 8, base_ch * 8),
+        )
 
         self.bottleneck = nn.Sequential(
-            nn.Conv2d(base_ch * 8, base_ch * 8, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(base_ch * 8),
+            nn.Conv2d(base_ch * 16, base_ch * 8, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.InstanceNorm2d(base_ch * 8, affine=True),
             nn.ReLU(inplace=False),
         )
 
@@ -277,28 +303,46 @@ class Generator(nn.Module):
         self.d4 = deconv_block(base_ch * 16, base_ch * 4, dropout=0.1)
         self.d3 = deconv_block(base_ch * 8, base_ch * 2)
         self.d2 = deconv_block(base_ch * 4, base_ch)
+        self.coarse_head = nn.Sequential(
+            nn.Conv2d(base_ch, base_ch // 2, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm2d(base_ch // 2, affine=True),
+            nn.ReLU(inplace=False),
+            nn.Conv2d(base_ch // 2, 1, kernel_size=3, stride=1, padding=1),
+        )
         self.d1 = nn.Sequential(
             nn.ConvTranspose2d(base_ch * 2, 1, kernel_size=4, stride=2, padding=1),
-            nn.Tanh(),
         )
 
     def forward(self, mask, noise=None):
         if noise is None:
-            noise = torch.randn(mask.size(0), self.noise_ch, mask.size(2), mask.size(3), device=mask.device)
+            noise = torch.randn(mask.size(0), self.noise_ch, device=mask.device)
+        elif noise.dim() == 4:
+            noise = noise.mean(dim=(2, 3))
 
-        x = torch.cat([mask, noise], dim=1)
+        y_coords = torch.linspace(-1.0, 1.0, mask.size(2), device=mask.device, dtype=mask.dtype)
+        x_coords = torch.linspace(-1.0, 1.0, mask.size(3), device=mask.device, dtype=mask.dtype)
+        yy = y_coords.view(1, 1, mask.size(2), 1).expand(mask.size(0), 1, mask.size(2), mask.size(3))
+        xx = x_coords.view(1, 1, 1, mask.size(3)).expand(mask.size(0), 1, mask.size(2), mask.size(3))
+        blurred = F.avg_pool2d(mask, kernel_size=15, stride=1, padding=7)
+        edge_hint = (mask - blurred).abs()
+
+        x = torch.cat([mask, blurred, edge_hint, xx, yy], dim=1)
         e1 = self.e1(x)
         e2 = self.e2(e1)
         e3 = self.e3(e2)
         e4 = self.e4(e3)
         e5 = self.e5(e4)
-        b = self.bottleneck(e5)
+        latent = self.latent_proj(noise).view(mask.size(0), -1, 1, 1)
+        latent = latent.expand(-1, -1, e5.size(2), e5.size(3))
+        b = self.bottleneck(torch.cat([e5, latent], dim=1))
 
         d5 = self.d5(b)
         d4 = self.d4(torch.cat([d5, e4], dim=1))
         d3 = self.d3(torch.cat([d4, e3], dim=1))
         d2 = self.d2(torch.cat([d3, e2], dim=1))
-        return self.d1(torch.cat([d2, e1], dim=1))
+        coarse = F.interpolate(self.coarse_head(d2), size=mask.shape[-2:], mode="bilinear", align_corners=False)
+        fine = self.d1(torch.cat([d2, e1], dim=1))
+        return torch.tanh(fine + 0.35 * coarse)
 
 
 class PatchDiscriminator(nn.Module):
@@ -309,7 +353,7 @@ class PatchDiscriminator(nn.Module):
         self.block2 = disc_conv_block(base_ch, base_ch * 2)
         self.block3 = disc_conv_block(base_ch * 2, base_ch * 4)
         self.block4 = nn.Sequential(
-            spectral_norm(nn.Conv2d(base_ch * 4, base_ch * 8, kernel_size=4, stride=1, padding=1, bias=True)),
+            spectral_norm(nn.Conv2d(base_ch * 4 + 1, base_ch * 8, kernel_size=4, stride=1, padding=1, bias=True)),
             nn.InstanceNorm2d(base_ch * 8, affine=True),
             nn.LeakyReLU(0.2, inplace=False),
         )
@@ -320,10 +364,11 @@ class PatchDiscriminator(nn.Module):
         f1 = self.block1(x)
         f2 = self.block2(f1)
         f3 = self.block3(f2)
-        f4 = self.block4(f3)
+        f3_aug = minibatch_stddev(f3)
+        f4 = self.block4(f3_aug)
         logits = self.head(f4)
         if return_features:
-            return logits, [f1, f2, f3, f4]
+            return logits, [f1, f2, f3_aug, f4]
         return logits
 
 
@@ -378,6 +423,92 @@ def total_variation_loss(fake, mask):
     return tv_x + tv_y
 
 
+def masked_laplacian_loss(fake, real, mask):
+    fake_lap = laplacian_map(fake)
+    real_lap = laplacian_map(real)
+    return ((fake_lap - real_lap).abs() * mask).sum() / mask.sum().clamp_min(1.0)
+
+
+def mode_seeking_loss(fake_a, fake_b, noise_a, noise_b, mask):
+    image_delta = ((fake_a - fake_b).abs() * mask).sum() / mask.sum().clamp_min(1.0)
+    noise_delta = (noise_a - noise_b).abs().mean()
+    return 1.0 / (image_delta / noise_delta.clamp_min(1e-6) + 1e-6)
+
+
+def masked_intensity_stats_loss(fake, real, mask, tail_ratio=0.1):
+    fake_01 = ((fake + 1.0) * 0.5).clamp(0.0, 1.0)
+    real_01 = ((real + 1.0) * 0.5).clamp(0.0, 1.0)
+    losses = []
+
+    for i in range(fake.size(0)):
+        valid = mask[i, 0] > 0.5
+        if valid.sum().item() < 16:
+            continue
+
+        fake_vals = fake_01[i, 0][valid]
+        real_vals = real_01[i, 0][valid]
+
+        fake_mean = fake_vals.mean()
+        real_mean = real_vals.mean()
+        fake_std = fake_vals.std(unbiased=False)
+        real_std = real_vals.std(unbiased=False)
+
+        k = max(1, int(fake_vals.numel() * tail_ratio))
+        fake_sorted = torch.sort(fake_vals).values
+        real_sorted = torch.sort(real_vals).values
+        fake_lo = fake_sorted[:k].mean()
+        fake_hi = fake_sorted[-k:].mean()
+        real_lo = real_sorted[:k].mean()
+        real_hi = real_sorted[-k:].mean()
+        quantiles = [0.1, 0.25, 0.5, 0.75, 0.9]
+        q_loss = fake_vals.new_tensor(0.0)
+        last_index = fake_sorted.numel() - 1
+        for q in quantiles:
+            idx = min(last_index, max(0, int(round(last_index * q))))
+            q_loss = q_loss + F.l1_loss(fake_sorted[idx], real_sorted[idx])
+
+        losses.append(
+            F.l1_loss(fake_mean, real_mean)
+            + F.l1_loss(fake_std, real_std)
+            + 0.5 * F.l1_loss(fake_lo, real_lo)
+            + 0.5 * F.l1_loss(fake_hi, real_hi)
+            + q_loss / len(quantiles)
+        )
+
+    if not losses:
+        return fake.new_tensor(0.0)
+    return torch.stack(losses).mean()
+
+
+def masked_texture_stats_loss(fake, real, mask):
+    fake_01 = ((fake + 1.0) * 0.5).clamp(0.0, 1.0)
+    real_01 = ((real + 1.0) * 0.5).clamp(0.0, 1.0)
+    fake_edge = sobel_edges(fake_01)
+    real_edge = sobel_edges(real_01)
+    fake_lap = laplacian_map(fake_01)
+    real_lap = laplacian_map(real_01)
+    losses = []
+
+    for i in range(fake.size(0)):
+        valid = mask[i, 0] > 0.5
+        if valid.sum().item() < 16:
+            continue
+
+        fe = fake_edge[i, 0][valid]
+        re = real_edge[i, 0][valid]
+        fl = fake_lap[i, 0][valid]
+        rl = real_lap[i, 0][valid]
+        losses.append(
+            F.l1_loss(fe.mean(), re.mean())
+            + F.l1_loss(fe.std(unbiased=False), re.std(unbiased=False))
+            + 0.5 * F.l1_loss(fl.var(unbiased=False), rl.var(unbiased=False))
+        )
+
+    if not losses:
+        return fake.new_tensor(0.0)
+    return torch.stack(losses).mean()
+
+
 def get_class_config(args, class_name):
     if class_name == "normal":
         return {
@@ -385,12 +516,20 @@ def get_class_config(args, class_name):
             "lambda_edge": args.normal_lambda_edge,
             "lambda_fm": args.normal_lambda_fm,
             "lambda_tv": args.normal_lambda_tv,
+            "lambda_lap": args.normal_lambda_lap,
+            "lambda_ms": args.normal_lambda_ms,
+            "lambda_stats": args.normal_lambda_stats,
+            "lambda_texstats": args.normal_lambda_texstats,
         }
     return {
         "lambda_l1": args.fatty_lambda_l1,
         "lambda_edge": args.fatty_lambda_edge,
         "lambda_fm": args.fatty_lambda_fm,
         "lambda_tv": args.fatty_lambda_tv,
+        "lambda_lap": args.fatty_lambda_lap,
+        "lambda_ms": args.fatty_lambda_ms,
+        "lambda_stats": args.fatty_lambda_stats,
+        "lambda_texstats": args.fatty_lambda_texstats,
     }
 
 
@@ -597,7 +736,14 @@ def plot_history(class_dir, history):
     plt.plot(history["g_recon"], label="G Recon")
     plt.plot(history["g_fm"], label="G FeatureMatch")
     plt.plot(history["g_tv"], label="G TV")
+    plt.plot(history["g_lap"], label="G Lap")
+    plt.plot(history["g_ms"], label="G ModeSeek")
+    plt.plot(history["g_stats"], label="G Stats")
+    plt.plot(history["g_texstats"], label="G TexStats")
     plt.plot(history["d_loss"], label="D Loss")
+    plt.plot(history["val_lap"], label="Val Lap")
+    plt.plot(history["val_stats"], label="Val Stats")
+    plt.plot(history["val_texstats"], label="Val TexStats")
     plt.plot(history["val_score"], label="Val Score")
     plt.legend()
     plt.xlabel("Epoch")
@@ -654,7 +800,7 @@ def train_single_class(class_name, class_idx, args, distributed, rank, world_siz
         "image": torch.stack([item["image"] for item in preview_items], dim=0),
         "mask": torch.stack([item["mask"] for item in preview_items], dim=0),
     }
-    fixed_noise = torch.randn(preview_batch["image"].size(0), args.noise_ch, args.img_size, args.img_size)
+    fixed_noise = torch.randn(preview_batch["image"].size(0), args.noise_ch)
 
     generator = Generator(noise_ch=args.noise_ch, base_ch=args.base_ch).to(device)
     discriminator = PatchDiscriminator(base_ch=args.base_ch).to(device)
@@ -669,9 +815,28 @@ def train_single_class(class_name, class_idx, args, distributed, rank, world_siz
 
     class_dir = os.path.join("GAN", args.run_name, class_name)
     metrics_path = os.path.join(class_dir, "metrics_per_epoch.csv")
-    history = {"g_total": [], "g_adv": [], "g_recon": [], "g_fm": [], "g_tv": [], "d_loss": [], "val_l1": [], "val_edge": [], "val_ssim": [], "val_score": []}
+    history = {
+        "g_total": [],
+        "g_adv": [],
+        "g_recon": [],
+        "g_fm": [],
+        "g_tv": [],
+        "g_lap": [],
+        "g_ms": [],
+        "g_stats": [],
+        "g_texstats": [],
+        "d_loss": [],
+        "val_l1": [],
+        "val_edge": [],
+        "val_ssim": [],
+        "val_lap": [],
+        "val_stats": [],
+        "val_texstats": [],
+        "val_score": [],
+    }
     best_score = float("inf")
     best_epoch = -1
+    saved_candidates = []
 
     if is_main_process(rank):
         ensure_dir(class_dir)
@@ -680,7 +845,7 @@ def train_single_class(class_name, class_idx, args, distributed, rank, world_siz
         write_hparams(class_dir, args, len(pairs), world_size, class_name)
         with open(metrics_path, "w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(["epoch", "g_total", "g_adv", "g_recon", "g_fm", "g_tv", "d_loss", "val_l1", "val_edge", "val_ssim", "val_score"])
+            writer.writerow(["epoch", "g_total", "g_adv", "g_recon", "g_fm", "g_tv", "g_lap", "g_ms", "g_stats", "g_texstats", "d_loss", "val_l1", "val_edge", "val_lap", "val_stats", "val_texstats", "val_ssim", "val_score"])
 
     ddp_barrier(distributed)
 
@@ -695,6 +860,10 @@ def train_single_class(class_name, class_idx, args, distributed, rank, world_siz
         g_recon_epoch = 0.0
         g_fm_epoch = 0.0
         g_tv_epoch = 0.0
+        g_lap_epoch = 0.0
+        g_ms_epoch = 0.0
+        g_stats_epoch = 0.0
+        g_texstats_epoch = 0.0
         d_loss_epoch = 0.0
         num_steps = 0
 
@@ -702,7 +871,8 @@ def train_single_class(class_name, class_idx, args, distributed, rank, world_siz
             real = batch["image"].to(device, non_blocking=True)
             mask = batch["mask"].to(device, non_blocking=True)
             real, mask = maybe_augment_batch(real, mask, enabled=args.hflip_aug)
-            noise = torch.randn(real.size(0), args.noise_ch, args.img_size, args.img_size, device=device)
+            noise = torch.randn(real.size(0), args.noise_ch, device=device)
+            noise_alt = torch.randn(real.size(0), args.noise_ch, device=device)
             fake = generator(mask, noise) * mask
             real = real * mask
 
@@ -727,7 +897,24 @@ def train_single_class(class_name, class_idx, args, distributed, rank, world_siz
             )
             g_fm = feature_matching_loss(fake_features, real_features)
             g_tv = total_variation_loss(fake, mask)
-            g_total = g_adv + g_recon + class_cfg["lambda_fm"] * g_fm + class_cfg["lambda_tv"] * g_tv
+            g_lap = masked_laplacian_loss(fake, real, mask)
+            g_stats = masked_intensity_stats_loss(fake, real, mask)
+            g_texstats = masked_texture_stats_loss(fake, real, mask)
+            generator.eval()
+            with torch.no_grad():
+                fake_alt = generator(mask, noise_alt) * mask
+            generator.train()
+            g_ms = mode_seeking_loss(fake, fake_alt, noise, noise_alt, mask)
+            g_total = (
+                g_adv
+                + g_recon
+                + class_cfg["lambda_fm"] * g_fm
+                + class_cfg["lambda_tv"] * g_tv
+                + class_cfg["lambda_lap"] * g_lap
+                + class_cfg["lambda_ms"] * g_ms
+                + class_cfg["lambda_stats"] * g_stats
+                + class_cfg["lambda_texstats"] * g_texstats
+            )
             g_total.backward()
             g_opt.step()
 
@@ -736,6 +923,10 @@ def train_single_class(class_name, class_idx, args, distributed, rank, world_siz
             g_recon_epoch += g_recon.item()
             g_fm_epoch += g_fm.item()
             g_tv_epoch += g_tv.item()
+            g_lap_epoch += g_lap.item()
+            g_ms_epoch += g_ms.item()
+            g_stats_epoch += g_stats.item()
+            g_texstats_epoch += g_texstats.item()
             d_loss_epoch += d_loss.item()
             num_steps += 1
 
@@ -747,10 +938,17 @@ def train_single_class(class_name, class_idx, args, distributed, rank, world_siz
         g_recon_mean = reduce_mean(g_recon_epoch / max(num_steps, 1), device, world_size)
         g_fm_mean = reduce_mean(g_fm_epoch / max(num_steps, 1), device, world_size)
         g_tv_mean = reduce_mean(g_tv_epoch / max(num_steps, 1), device, world_size)
+        g_lap_mean = reduce_mean(g_lap_epoch / max(num_steps, 1), device, world_size)
+        g_ms_mean = reduce_mean(g_ms_epoch / max(num_steps, 1), device, world_size)
+        g_stats_mean = reduce_mean(g_stats_epoch / max(num_steps, 1), device, world_size)
+        g_texstats_mean = reduce_mean(g_texstats_epoch / max(num_steps, 1), device, world_size)
         d_loss_mean = reduce_mean(d_loss_epoch / max(num_steps, 1), device, world_size)
 
         val_l1 = 0.0
         val_edge = 0.0
+        val_lap = 0.0
+        val_stats = 0.0
+        val_texstats = 0.0
         val_ssim = 0.0
         val_steps = 0
         if val_loader is not None:
@@ -764,26 +962,42 @@ def train_single_class(class_name, class_idx, args, distributed, rank, world_siz
 
                     l1_inside = ((fake - real).abs() * mask).sum() / mask.sum().clamp_min(1.0)
                     edge_inside = ((sobel_edges(fake) - sobel_edges(real)).abs() * mask).sum() / mask.sum().clamp_min(1.0)
+                    lap_inside = ((laplacian_map(fake) - laplacian_map(real)).abs() * mask).sum() / mask.sum().clamp_min(1.0)
+                    stats_inside = masked_intensity_stats_loss(fake, real, mask)
+                    texstats_inside = masked_texture_stats_loss(fake, real, mask)
                     fake_01 = ((fake + 1.0) * 0.5).clamp(0.0, 1.0)
                     real_01 = ((real + 1.0) * 0.5).clamp(0.0, 1.0)
                     val_l1 += l1_inside.item()
                     val_edge += edge_inside.item()
+                    val_lap += lap_inside.item()
+                    val_stats += stats_inside.item()
+                    val_texstats += texstats_inside.item()
                     val_ssim += masked_ssim(fake_01, real_01, mask)
                     val_steps += 1
 
         val_l1 = reduce_mean(val_l1 / max(val_steps, 1), device, world_size)
         val_edge = reduce_mean(val_edge / max(val_steps, 1), device, world_size)
+        val_lap = reduce_mean(val_lap / max(val_steps, 1), device, world_size)
+        val_stats = reduce_mean(val_stats / max(val_steps, 1), device, world_size)
+        val_texstats = reduce_mean(val_texstats / max(val_steps, 1), device, world_size)
         val_ssim = reduce_mean(val_ssim / max(val_steps, 1), device, world_size)
-        val_score = val_l1 + 0.35 * val_edge + (1.0 - val_ssim)
+        val_score = val_l1 + 0.22 * val_edge + 0.28 * val_lap + 0.80 * val_stats + 0.80 * val_texstats + (1.0 - val_ssim)
 
         history["g_total"].append(g_total_mean)
         history["g_adv"].append(g_adv_mean)
         history["g_recon"].append(g_recon_mean)
         history["g_fm"].append(g_fm_mean)
         history["g_tv"].append(g_tv_mean)
+        history["g_lap"].append(g_lap_mean)
+        history["g_ms"].append(g_ms_mean)
+        history["g_stats"].append(g_stats_mean)
+        history["g_texstats"].append(g_texstats_mean)
         history["d_loss"].append(d_loss_mean)
         history["val_l1"].append(val_l1)
         history["val_edge"].append(val_edge)
+        history["val_lap"].append(val_lap)
+        history["val_stats"].append(val_stats)
+        history["val_texstats"].append(val_texstats)
         history["val_ssim"].append(val_ssim)
         history["val_score"].append(val_score)
 
@@ -791,7 +1005,8 @@ def train_single_class(class_name, class_idx, args, distributed, rank, world_siz
             print(
                 f"[{class_name}] Epoch {epoch:03d}/{args.epochs} "
                 f"G_total={g_total_mean:.4f} G_adv={g_adv_mean:.4f} G_recon={g_recon_mean:.4f} G_fm={g_fm_mean:.4f} G_tv={g_tv_mean:.4f} "
-                f"D={d_loss_mean:.4f} ValL1={val_l1:.4f} ValEdge={val_edge:.4f} ValSSIM={val_ssim:.4f} ValScore={val_score:.4f}"
+                f"G_lap={g_lap_mean:.4f} G_ms={g_ms_mean:.4f} G_stats={g_stats_mean:.4f} G_tex={g_texstats_mean:.4f} "
+                f"D={d_loss_mean:.4f} ValL1={val_l1:.4f} ValEdge={val_edge:.4f} ValLap={val_lap:.4f} ValStats={val_stats:.4f} ValTex={val_texstats:.4f} ValSSIM={val_ssim:.4f} ValScore={val_score:.4f}"
             )
             with open(metrics_path, "a", newline="") as f:
                 writer = csv.writer(f)
@@ -802,9 +1017,16 @@ def train_single_class(class_name, class_idx, args, distributed, rank, world_siz
                     f"{g_recon_mean:.6f}",
                     f"{g_fm_mean:.6f}",
                     f"{g_tv_mean:.6f}",
+                    f"{g_lap_mean:.6f}",
+                    f"{g_ms_mean:.6f}",
+                    f"{g_stats_mean:.6f}",
+                    f"{g_texstats_mean:.6f}",
                     f"{d_loss_mean:.6f}",
                     f"{val_l1:.6f}",
                     f"{val_edge:.6f}",
+                    f"{val_lap:.6f}",
+                    f"{val_stats:.6f}",
+                    f"{val_texstats:.6f}",
                     f"{val_ssim:.6f}",
                     f"{val_score:.6f}",
                 ])
@@ -812,14 +1034,24 @@ def train_single_class(class_name, class_idx, args, distributed, rank, world_siz
             if epoch % args.sample_every == 0 or epoch == 1:
                 save_preview(generator, preview_batch, fixed_noise, epoch, class_dir, device)
 
-            if val_score < best_score:
+            effective_warmup = min(args.save_warmup_epochs, args.epochs)
+            should_consider = epoch >= effective_warmup
+            improved_enough = best_epoch < 0 or val_score < (best_score - args.min_save_improvement)
+            if should_consider and improved_enough:
                 best_score = val_score
                 best_epoch = epoch
                 gen_to_save = generator.module if isinstance(generator, DDP) else generator
                 disc_to_save = discriminator.module if isinstance(discriminator, DDP) else discriminator
                 torch.save(gen_to_save.state_dict(), os.path.join(class_dir, "models", "generator.pt"))
                 torch.save(disc_to_save.state_dict(), os.path.join(class_dir, "models", "discriminator.pt"))
-                torch.save(gen_to_save.state_dict(), os.path.join(class_dir, "models", f"generator_epoch_{epoch:04d}.pt"))
+                candidate_path = os.path.join(class_dir, "models", f"generator_epoch_{epoch:04d}.pt")
+                torch.save(gen_to_save.state_dict(), candidate_path)
+                saved_candidates.append((val_score, candidate_path))
+                saved_candidates.sort(key=lambda item: item[0])
+                while len(saved_candidates) > args.save_top_k:
+                    _, stale_path = saved_candidates.pop()
+                    if stale_path != candidate_path and os.path.exists(stale_path):
+                        os.remove(stale_path)
 
     if is_main_process(rank):
         plot_history(class_dir, history)
@@ -832,11 +1064,18 @@ def train_single_class(class_name, class_idx, args, distributed, rank, world_siz
             writer = csv.writer(f)
             writer.writerow(["best_epoch", best_epoch])
             writer.writerow(["best_val_score", f"{best_score:.6f}"])
-            writer.writerow(["best_model_rule", "saved_only_when_val_score_improves"])
+            writer.writerow(["best_model_rule", "saved_after_warmup_when_val_score_improves_by_margin"])
             writer.writerow(["class_lambda_l1", f"{class_cfg['lambda_l1']:.6f}"])
             writer.writerow(["class_lambda_edge", f"{class_cfg['lambda_edge']:.6f}"])
             writer.writerow(["class_lambda_fm", f"{class_cfg['lambda_fm']:.6f}"])
             writer.writerow(["class_lambda_tv", f"{class_cfg['lambda_tv']:.6f}"])
+            writer.writerow(["class_lambda_lap", f"{class_cfg['lambda_lap']:.6f}"])
+            writer.writerow(["class_lambda_ms", f"{class_cfg['lambda_ms']:.6f}"])
+            writer.writerow(["class_lambda_stats", f"{class_cfg['lambda_stats']:.6f}"])
+            writer.writerow(["class_lambda_texstats", f"{class_cfg['lambda_texstats']:.6f}"])
+            writer.writerow(["save_top_k", args.save_top_k])
+            writer.writerow(["save_warmup_epochs", args.save_warmup_epochs])
+            writer.writerow(["min_save_improvement", f"{args.min_save_improvement:.6f}"])
             for key, value in stats["summary"].items():
                 writer.writerow([key, f"{value:.6f}"])
 

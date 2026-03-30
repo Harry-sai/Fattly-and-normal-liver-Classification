@@ -1,0 +1,17 @@
+best_epoch,88
+best_val_score,1.100670
+best_model_rule,saved_only_when_val_score_improves
+class_lambda_l1,24.000000
+class_lambda_edge,5.000000
+class_lambda_fm,1.500000
+class_lambda_tv,0.250000
+class_lambda_lap,1.500000
+class_lambda_ms,0.300000
+class_lambda_stats,1.100000
+class_lambda_texstats,1.000000
+save_top_k,3
+hist_l1,0.189826
+mean_diff,0.004810
+std_diff,0.001892
+edge_diff,0.071215
+lap_var_diff,0.015042
