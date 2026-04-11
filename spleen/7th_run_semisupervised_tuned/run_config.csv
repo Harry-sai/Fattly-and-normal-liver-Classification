@@ -1,0 +1,29 @@
+,value
+IMG_SIZE,512
+BATCH_SIZE,8
+EPOCHS,80
+LR,0.0003
+WEIGHT_DECAY,0.0001
+THRESH,0.5
+DROPOUT_P,0.1
+MAX_DICE_WEIGHT,0.3
+FREEZE_TILL,
+KFOLDS,5
+AUGMENTATIONS,"Compose([
+  HorizontalFlip(p=0.5),
+  Rotate(p=0.5, border_mode=0, crop_border=False, fill=0.0, fill_mask=0.0, interpolation=1, limit=(-15.0, 15.0), mask_interpolation=0, rotate_method='largest_box'),
+  Affine(p=0.4, balanced_scale=False, border_mode=0, fill=0.0, fill_mask=0.0, fit_output=False, interpolation=1, keep_ratio=False, mask_interpolation=0, rotate=(0.0, 0.0), rotate_method='largest_box', scale={'x': (0.9, 1.1), 'y': (0.9, 1.1)}, shear={'x': (0.0, 0.0), 'y': (0.0, 0.0)}, translate_percent={'x': (0.0625, 0.0625), 'y': (0.0625, 0.0625)}, translate_px=None),
+  RandomBrightnessContrast(p=0.7, brightness_by_max=True, brightness_limit=(-0.2, 0.2), contrast_limit=(-0.2, 0.2), ensure_safe_range=False),
+  RandomGamma(p=0.5, gamma_limit=(80.0, 120.0)),
+  GaussNoise(p=0.4, mean_range=(0.0, 0.0), noise_scale_factor=1.0, per_channel=True, std_range=(0.02, 0.1)),
+  Resize(p=1.0, area_for_downscale=None, height=512, interpolation=1, mask_interpolation=0, width=512),
+], p=1.0, bbox_params=None, keypoint_params=None, additional_targets={'mask': 'mask'}, is_check_shapes=True)"
+ENCODER,ResNet34
+OPTIMIZER,AdamW
+LOSS,DiceFocalLoss(sigmoid=True)
+NUM_WORKERS,4
+MANUAL_MASK_FG_THRESHOLD,10
+PSEUDO_SAMPLE_WEIGHT,0.5
+PSEUDO_LOSS_WEIGHT,0.5
+COMMENT,"tuned semi-supervised spleen run: best-run style 512 input and stronger augmentation, while still keeping pseudo labels limited to training with reduced weight and manual-only validation
+            "

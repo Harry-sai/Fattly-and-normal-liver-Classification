@@ -1,0 +1,27 @@
+,value
+IMG_SIZE,384
+BATCH_SIZE,8
+EPOCHS,80
+LR,0.0002
+WEIGHT_DECAY,0.0001
+THRESH,0.5
+DROPOUT_P,0.05
+MAX_DICE_WEIGHT,0.3
+FREEZE_TILL,
+KFOLDS,5
+AUGMENTATIONS,"Compose([
+  HorizontalFlip(p=0.5),
+  Rotate(p=0.35, border_mode=0, crop_border=False, fill=0.0, fill_mask=0.0, interpolation=1, limit=(-10.0, 10.0), mask_interpolation=0, rotate_method='largest_box'),
+  Affine(p=0.25, balanced_scale=False, border_mode=0, fill=0.0, fill_mask=0.0, fit_output=False, interpolation=1, keep_ratio=False, mask_interpolation=0, rotate=(0.0, 0.0), rotate_method='largest_box', scale={'x': (0.95, 1.05), 'y': (0.95, 1.05)}, shear={'x': (0.0, 0.0), 'y': (0.0, 0.0)}, translate_percent={'x': (0.0625, 0.0625), 'y': (0.0625, 0.0625)}, translate_px=None),
+  RandomBrightnessContrast(p=0.4, brightness_by_max=True, brightness_limit=(-0.12, 0.12), contrast_limit=(-0.12, 0.12), ensure_safe_range=False),
+  RandomGamma(p=0.25, gamma_limit=(90.0, 110.0)),
+  GaussNoise(p=0.2, mean_range=(0.0, 0.0), noise_scale_factor=1.0, per_channel=True, std_range=(0.01, 0.04)),
+  Resize(p=1.0, area_for_downscale=None, height=384, interpolation=1, mask_interpolation=0, width=384),
+], p=1.0, bbox_params=None, keypoint_params=None, additional_targets={'mask': 'mask'}, is_check_shapes=True)"
+ENCODER,ResNet34
+OPTIMIZER,AdamW
+LOSS,DiceFocalLoss(sigmoid=True)
+NUM_WORKERS,4
+MANUAL_MASK_FG_THRESHOLD,10
+COMMENT,"pseudo-label tuned spleen run: stable 384 input, softer augmentation, lower lr, and safer grayscale-to-binary mask thresholding for mixed manual and pseudo masks
+            "
