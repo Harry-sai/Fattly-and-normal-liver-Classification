@@ -1,0 +1,26 @@
+,value
+DATASET_CSV,artifacts/liver_spleen_dataset.csv
+FEATURES_CSV,artifacts/liver_spleen_features.csv
+IMG_SIZE,320
+BATCH_SIZE,4
+EPOCHS,42
+LR,6e-05
+BACKBONE_LR_SCALE,0.28
+WEIGHT_DECAY,0.0014
+KFOLDS,5
+DROP_OUT,0.32
+MODEL,DenseNet121 with liver+spleen+difference channels + attenuation stats
+OPTIMIZER,AdamW + ReduceLROnPlateau
+LOSS,BCEWithLogitsLoss
+COMMENT,"Tuned after reviewing the recent DenseNet runs.
+Main changes:
+- switch from independently resized liver/spleen crops to a shared union crop so relative organ context is preserved
+- use channels: full shared crop, liver-masked crop, spleen-masked crop
+- move back to moderate regularization and moderate fine-tuning instead of the over-restricted third run
+- scheduler tracks validation AUC again because the third run was underfitting rather than exploding
+Uses 3 input channels:
+1) full shared abdomen crop around liver+spleen
+2) liver-masked shared crop
+3) spleen-masked shared crop
+and concatenates attenuation stats before final classification.
+"

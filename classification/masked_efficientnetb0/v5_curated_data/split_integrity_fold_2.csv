@@ -1,0 +1,5 @@
+fold,check,warns_on_overlap,overlap_count,example_values
+2,image_id_only_overlap_info,False,24,103; 107; 117; 125; 126; 133; 135; 142; 144; 149
+2,class_image_id_overlap,True,0,
+2,image_path_overlap,True,0,
+2,derived_class_image_group_overlap,True,0,

@@ -1,0 +1,56 @@
+{
+  "mean_ratio": {
+    "normal_p05": 0.8747125863397366,
+    "normal_p25": 0.9398627170668437,
+    "normal_p50": 0.9729622949395969,
+    "normal_p75": 1.006804185037758,
+    "normal_p95": 1.0475988086558692
+  },
+  "median_ratio": {
+    "normal_p05": 0.8640934197850922,
+    "normal_p25": 0.9279122118270785,
+    "normal_p50": 0.9609477073936841,
+    "normal_p75": 0.9942276611293088,
+    "normal_p95": 1.0399207664479848
+  },
+  "mean_diff": {
+    "normal_p05": -25.213439178466796,
+    "normal_p25": -11.287887573242188,
+    "normal_p50": -5.210655212402344,
+    "normal_p75": 1.2016220092773438,
+    "normal_p95": 8.269118499755857
+  },
+  "median_diff": {
+    "normal_p05": -27.35,
+    "normal_p25": -14.0,
+    "normal_p50": -7.0,
+    "normal_p75": -1.0,
+    "normal_p95": 7.0
+  },
+  "p25_diff": {
+    "normal_p05": -27.35,
+    "normal_p25": -14.75,
+    "normal_p50": -8.0,
+    "normal_p75": -1.0,
+    "normal_p95": 7.0
+  },
+  "p75_diff": {
+    "normal_p05": -26.35,
+    "normal_p25": -13.0,
+    "normal_p50": -7.0,
+    "normal_p75": 0.0,
+    "normal_p95": 8.0
+  },
+  "normal_range_rule": {
+    "description": "Predict normal if liver-to-spleen mean_ratio and mean_diff both fall inside normal 5th-95th percentile ranges; otherwise fatty_liver.",
+    "heuristic_accuracy_on_full_dataset": 0.6533996683250415,
+    "ratio_range": [
+      0.8747125863397366,
+      1.0475988086558692
+    ],
+    "diff_range": [
+      -25.213439178466796,
+      8.269118499755857
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+,mean_ratio,mean_ratio,mean_diff,mean_diff,median_ratio,median_ratio,median_diff,median_diff
+,mean,std,mean,std,mean,std,mean,std
+class_name,,,,,,,,
+fatty_liver,0.892,0.099,-19.553,16.72,0.874,0.107,-23.22,18.009
+normal,0.977,0.095,-5.242,13.611,0.966,0.099,-7.401,14.003

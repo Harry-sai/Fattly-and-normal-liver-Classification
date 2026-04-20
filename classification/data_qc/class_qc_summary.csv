@@ -1,0 +1,5 @@
+,image_mean,image_mean,image_mean,image_mean,image_std,image_std,image_std,image_std,liver_frac,liver_frac,liver_frac,liver_frac,spleen_frac,spleen_frac,spleen_frac,spleen_frac,mean_ratio,mean_ratio,mean_ratio,mean_ratio,mean_diff,mean_diff,mean_diff,mean_diff
+,mean,std,min,max,mean,std,min,max,mean,std,min,max,mean,std,min,max,mean,std,min,max,mean,std,min,max
+class_name,,,,,,,,,,,,,,,,,,,,,,,,
+fatty_liver,83.7397,16.0887,43.4333,126.0611,79.163,5.6522,63.6898,92.7062,0.2147,0.058,0.0296,0.3413,0.0391,0.0162,0.0047,0.0929,0.9028,0.0994,0.5436,1.6855,-17.441,16.7491,-92.193,67.6722
+normal,92.5819,17.9804,47.0533,145.759,85.6457,6.3329,66.19,105.4019,0.2159,0.0483,0.0986,0.3682,0.041,0.0155,0.0066,0.0915,0.9859,0.0943,0.8022,2.0492,-3.5334,13.5401,-44.1021,111.9822

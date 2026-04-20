@@ -1,0 +1,20 @@
+,value
+DATASET_CSV,artifacts/liver_spleen_dataset.csv
+FEATURES_CSV,artifacts/liver_spleen_features.csv
+IMG_SIZE,256
+BATCH_SIZE,8
+EPOCHS,45
+LR,0.0002
+WEIGHT_DECAY,0.001
+KFOLDS,5
+DROP_OUT,0.5
+MODEL,EfficientNetB0 with liver+spleen+difference channels + attenuation stats
+OPTIMIZER,AdamW + ReduceLROnPlateau
+LOSS,BCEWithLogitsLoss
+COMMENT,"Built in the same style as the older working scripts.
+Uses 3 input channels:
+1) liver ROI
+2) spleen ROI
+3) signed liver-spleen difference map
+and concatenates attenuation stats before final classification.
+"

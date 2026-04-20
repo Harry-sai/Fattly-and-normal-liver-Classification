@@ -1,7 +1,4 @@
-# ============================================================
-# Liver Mask Post-processing Script
-# Reads manually created masks, fixes them, saves clean masks
-# ============================================================
+# simple mask cleanup script
 
 import numpy as np
 import cv2
@@ -10,16 +7,12 @@ from pathlib import Path
 from PIL import Image
 from tqdm import tqdm
 
-# ------------------------------------------------------------
-# CONFIG (match your existing folder structure)
-# ------------------------------------------------------------
-INPUT_MASK_ROOT  = "data/predictions_more_imgs/normal"          # your current manual masks
-OUTPUT_MASK_ROOT = "Check/normal"    # new cleaned masks
+# paths
+INPUT_MASK_ROOT  = "data/predictions_more_imgs/normal"          # current masks
+OUTPUT_MASK_ROOT = "Check/normal"    # cleaned masks
 MASK_EXTENSIONS  = [".png", ".jpg", ".jpeg"]
 
-# ------------------------------------------------------------
-# Core mask-fixing function
-# ------------------------------------------------------------
+# main cleanup step
 def fix_liver_mask(mask: np.ndarray) -> np.ndarray:
     """
     Fix liver mask by:
@@ -29,13 +22,13 @@ def fix_liver_mask(mask: np.ndarray) -> np.ndarray:
 
     Returns uint8 mask with values {0, 255}
     """
-    # 1. Ensure binary
+    # 1. make it binary
     mask = (mask > 0).astype(np.uint8)
 
-    # 2. Fill internal holes
+    # 2. fill holes
     mask_filled = ndi.binary_fill_holes(mask).astype(np.uint8)
 
-    # 3. Keep largest connected component
+    # 3. keep biggest part
     num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
         mask_filled, connectivity=8
     )
@@ -49,9 +42,7 @@ def fix_liver_mask(mask: np.ndarray) -> np.ndarray:
     return clean_mask * 255
 
 
-# ------------------------------------------------------------
-# Process entire directory (recursively, preserves structure)
-# ------------------------------------------------------------
+# process all masks
 def process_all_masks(input_root, output_root):
     input_root = Path(input_root)
     output_root = Path(output_root)
@@ -75,9 +66,7 @@ def process_all_masks(input_root, output_root):
         Image.fromarray(fixed_mask).save(out_path)
 
 
-# ------------------------------------------------------------
-# Entry point
-# ------------------------------------------------------------
+# run
 if __name__ == "__main__":
     process_all_masks(
         input_root=INPUT_MASK_ROOT,

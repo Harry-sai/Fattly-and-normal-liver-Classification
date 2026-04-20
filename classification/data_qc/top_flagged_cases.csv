@@ -1,0 +1,21 @@
+image_id,class_name,flag_count,review_priority,flag_summary,mean_ratio,liver_frac,spleen_frac,action
+260,fatty_liver,3,urgent,"low_img_std, low_liver_mean, low_spleen_mean",0.753148495485859,0.184470663265306,0.0111884427684117,keep
+171,normal,3,urgent,"high_img_std, high_liver_mean, high_spleen_mean",0.881197610981188,0.175705434653882,0.0212226284758294,drop
+311,normal,3,urgent,"high_img_std, high_liver_mean, high_spleen_mean",0.91921743920915,0.268462468107963,0.0508840248869791,keep
+20,normal,3,urgent,"high_img_std, high_liver_mean, high_spleen_mean",0.94607888420425,0.240968632518797,0.0531877790178571,keep
+1197,fatty_liver,3,urgent,"low_img_std, low_spleen_mean, high_mean_ratio",1.14807261228153,0.251298459518986,0.0644444023720421,drop
+139,normal,3,urgent,"high_img_std, high_liver_mean, high_mean_ratio",1.16337719740998,0.112762669160238,0.0108866464064002,drop
+183,normal,3,urgent,"high_liver_mean, low_spleen_mean, high_mean_ratio",2.04917202283678,0.148551550265448,0.0695643741969892,drop
+1087,fatty_liver,2,review,"low_liver_mean, low_mean_ratio",0.543557469404581,0.219985080193957,0.0342583613079697,keep
+1093,fatty_liver,2,review,"low_liver_mean, low_mean_ratio",0.587116092014169,0.295083894913283,0.0448957513768686,keep
+151,fatty_liver,2,review,"low_liver_mean, low_mean_ratio",0.59827905543679,0.219838921761999,0.0469619767696691,keep
+1094,fatty_liver,2,review,"low_liver_mean, low_mean_ratio",0.609056979546661,0.242394201543138,0.0376595744680851,keep
+70,fatty_liver,2,review,"low_img_std, low_liver_mean",0.74984619860543,0.200687974210795,0.0367849982309235,keep
+208,normal,2,review,"high_img_mean, high_spleen_mean",0.887321668168404,0.258259840002881,0.0234908544134264,keep
+1113,fatty_liver,2,review,"small_liver, small_spleen",0.978810446831449,0.044950180319805,0.00919025407913308,keep
+155,normal,2,review,"high_img_mean, high_liver_mean",1.02109906114006,0.254604151319496,0.0526157769950291,keep
+1088,fatty_liver,2,review,"low_liver_mean, low_spleen_mean",1.0708288496724,0.0811997467553023,0.0124596391263058,keep
+1013,fatty_liver,2,review,"low_spleen_mean, high_mean_ratio",1.23912122957103,0.237602101884165,0.0404894579738863,drop
+1043,fatty_liver,2,review,"low_spleen_mean, high_mean_ratio",1.68553885522599,0.251921771456279,0.0196088572813965,keep
+307,normal,2,review,"low_spleen_mean, high_mean_ratio",1.76776359712511,0.292706821192578,0.0308119749648985,drop
+15,fatty_liver,1,watch,low_mean_ratio,0.661713705959841,0.215406058176056,0.0453879062866089,keep

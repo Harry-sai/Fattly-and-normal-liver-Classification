@@ -8,7 +8,7 @@ import torch.nn as nn
 import torchvision.models as models
 
 # -------------------------
-# CONFIG (MATCH TRAINING)
+# Prediction settings
 # -------------------------
 MODEL_PATH = "resnet18/final/best_unet_fold_3.pth"
 IMAGE_DIR  = "data/images"
@@ -21,7 +21,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # -------------------------
-# Utilities (copied)
+# Helper functions
 # -------------------------
 def center_crop_to(tensor, target_h, target_w):
     if tensor.ndim == 4:
@@ -37,7 +37,7 @@ def center_crop_to(tensor, target_h, target_w):
     return tensor
 
 # -------------------------
-# UNet with ResNet18 encoder + dropout in decoder
+# ResNet18 U-Net
 # -------------------------
 class UnetResNet18(nn.Module):
     def __init__(self, in_channels=1, out_channels=1, pretrained=True, dropout_p=0.1):
@@ -48,7 +48,7 @@ class UnetResNet18(nn.Module):
         except Exception:
             resnet = models.resnet18(pretrained=pretrained)
 
-        # adapt first conv to accept grayscale
+        # make first conv work for grayscale
         if in_channels != 3:
             w = resnet.conv1.weight.data
             w_mean = w.mean(dim=1, keepdim=True)
@@ -56,9 +56,7 @@ class UnetResNet18(nn.Module):
             new_conv.weight.data = w_mean
             resnet.conv1 = new_conv
 
-        # -------------------------
-        # Encoder
-        # -------------------------
+        # encoder
         self.inc = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu)
         self.maxpool = resnet.maxpool
         self.encoder1 = resnet.layer1  # 64
@@ -66,9 +64,7 @@ class UnetResNet18(nn.Module):
         self.encoder3 = resnet.layer3  # 256
         self.encoder4 = resnet.layer4  # 512
 
-        # -------------------------
-        # Decoder blocks
-        # -------------------------
+        # decoder
         def conv_block(in_ch, out_ch):
             return nn.Sequential(
                 nn.Conv2d(in_ch, out_ch, 3, padding=1),
@@ -151,4 +147,3 @@ with torch.no_grad():
         Image.fromarray(mask).save(out_path)
 
         print(f"Saved: {out_path}")
-

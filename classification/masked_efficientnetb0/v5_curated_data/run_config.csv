@@ -1,0 +1,39 @@
+,value
+dataset_csv,artifacts/liver_spleen_dataset.csv
+features_csv,artifacts/liver_spleen_features.csv
+results_dir,classification/masked_efficientnetb0/v5_curated_data
+img_size,256
+batch_size,8
+epochs,32
+lr,0.0001
+backbone_lr_scale,0.12
+weight_decay,0.002
+folds,5
+max_folds,
+seed,42
+num_workers,2
+patience,6
+dropout,0.48
+label_smoothing,0.01
+context_pad_ratio,0.1
+debug_max,8
+blend_weight,0.7
+max_pos_weight,1.12
+freeze_backbone_epochs,3
+eval_tta_flip,True
+pretrained_weights,imagenet
+record_epoch_zero,True
+device,cuda
+comment,"Masked EfficientNet-B0 liver+spleen classifier.
+This keeps the more stable single-image architecture style from spleen_efficientnetb0.py,
+but fixes the main ROI problem:
+- one aligned union crop is used for all channels
+- channel 1 is union-masked context
+- channel 2 is liver-mask-only pixels
+- channel 3 is spleen-mask-only pixels
+- non-organ pixels are zeroed after resizing masks with nearest-neighbor interpolation
+
+The model is intentionally smaller and more frozen than the DenseNet hybrid to reduce overfitting.
+It also reports a fold-wise logistic-regression feature baseline and blend for comparison.
+- it records epoch-0 sanity metrics and split-integrity reports so early high validation AUC can be audited
+"

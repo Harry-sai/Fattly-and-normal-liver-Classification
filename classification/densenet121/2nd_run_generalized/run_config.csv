@@ -1,0 +1,26 @@
+,value
+DATASET_CSV,artifacts/liver_spleen_dataset.csv
+FEATURES_CSV,artifacts/liver_spleen_features.csv
+IMG_SIZE,320
+BATCH_SIZE,4
+EPOCHS,55
+LR,8e-05
+BACKBONE_LR_SCALE,0.35
+WEIGHT_DECAY,0.001
+KFOLDS,5
+DROP_OUT,0.35
+MODEL,DenseNet121 with liver+spleen+difference channels + attenuation stats
+OPTIMIZER,AdamW + ReduceLROnPlateau
+LOSS,BCEWithLogitsLoss
+COMMENT,"Tuned after reviewing the first DenseNet121 run.
+Main changes:
+- restored explicit input normalization from the older stable scripts
+- replaced small-batch BatchNorm head with LayerNorm head
+- reduced regularization slightly and lowered LR for steadier fold-to-fold training
+- unfreezes the last two DenseNet stages with a smaller backbone LR
+Uses 3 input channels:
+1) liver ROI
+2) spleen ROI
+3) signed liver-spleen difference map
+and concatenates attenuation stats before final classification.
+"

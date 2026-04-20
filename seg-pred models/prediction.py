@@ -10,7 +10,7 @@ import torchvision.models as models
 from skimage.measure import label, regionprops
 
 # -------------------------
-# CONFIG (MATCH TRAINING)
+# Prediction settings
 # -------------------------
 MODEL_PATH = "resnet34/hd95_more_imgs/best_unet_fold_4.pth"
 IMAGE_DIR  = "false_img/normal_img"
@@ -23,7 +23,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # -------------------------
-# Utilities (copied)
+# Helper functions
 # -------------------------
 def center_crop_to(tensor, target_h, target_w):
     if tensor.ndim == 4:
@@ -52,12 +52,12 @@ def clean_mask(mask, min_area_ratio=0.01):
 
     regions = regionprops(labeled)
 
-    # Keep largest component
+    # keep the biggest part
     largest = max(regions, key=lambda x: x.area)
 
     clean = np.zeros_like(mask)
 
-    # dynamic threshold (1% of image area default)
+    # area cutoff based on image size
     min_area = mask.shape[0] * mask.shape[1] * min_area_ratio
 
     for region in regions:
@@ -68,7 +68,7 @@ def clean_mask(mask, min_area_ratio=0.01):
 
 
 # -------------------------
-# Model (COPIED EXACTLY)
+# Model
 # -------------------------
 class UnetResNet34(nn.Module):
     def __init__(self, in_channels=1, out_channels=1, pretrained=False, dropout_p=0.1):

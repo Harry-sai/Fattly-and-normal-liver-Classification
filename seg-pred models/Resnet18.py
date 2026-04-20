@@ -21,7 +21,7 @@ import os
 
 
 # -------------------------
-# CONFIG 
+# Main settings
 # -------------------------
 IMAGES_ROOT      = "data/images"
 LABEL_MASKS_ROOT = "data/labelled_fixed"
@@ -39,20 +39,20 @@ THRESH = 0.55
 NUM_GPUS_TO_USE = 2
 KFOLDS = 5
 SEED = 42
-# dropout probability applied inside decoder conv blocks
+# decoder dropout
 DROPOUT_P = 0.1
 MAX_DICE_WEIGHT=0.3
 FREEZE_TILL=None
 
 
-# toggle to save a few augmented samples to RESULTS_DIR/aug_debug for visual check
+# save a few augmented samples if needed
 SAVE_AUG_SAMPLES = True
 AUG_DEBUG_OUT = Path(RESULTS_DIR) / "aug_debug"
 if SAVE_AUG_SAMPLES:
     AUG_DEBUG_OUT.mkdir(parents=True, exist_ok=True)
 
 # -------------------------
-# Albumentations transforms (paired)
+# Image and mask transforms
 # -------------------------
 train_transform = A.Compose([
      A.HorizontalFlip(p=0.5),     
@@ -79,7 +79,7 @@ val_transform = A.Compose([
 ], additional_targets={"mask": "mask"}) 
 
 # -------------------------
-# Run configuration to save parameters
+# Save run settings
 # -------------------------
 RUN_CONFIG = {
     "IMG_SIZE": IMG_SIZE,
@@ -101,7 +101,7 @@ RUN_CONFIG = {
 }
 
 # -------------------------
-# Utilities
+# Helper functions
 # -------------------------
 def center_crop_to(tensor, target_h, target_w):
     """Center-crop a 4D tensor (B,C,H,W) or 3D tensor (C,H,W) to (target_h, target_w)."""

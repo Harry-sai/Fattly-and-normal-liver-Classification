@@ -1,0 +1,28 @@
+,value
+DATASET_CSV,artifacts/liver_spleen_dataset.csv
+FEATURES_CSV,artifacts/liver_spleen_features.csv
+IMG_SIZE,320
+BATCH_SIZE,4
+EPOCHS,36
+LR,0.00012
+BACKBONE_LR_SCALE,0.25
+WEIGHT_DECAY,0.0012
+KFOLDS,5
+DROP_OUT,0.35
+MODEL,Multi-view EfficientNet-B0 with shared-context crop + attenuation stats
+OPTIMIZER,AdamW + ReduceLROnPlateau
+LOSS,BCEWithLogitsLoss
+COMMENT,"Task understanding:
+- label is binary: normal vs fatty_liver
+- liver and spleen should be analyzed together, not as isolated unrelated crops
+- shared anatomical context matters, but organ-specific evidence matters too
+
+This script uses three aligned views from the same union crop:
+1) shared full crop around liver+spleen
+2) liver-masked crop inside the same shared crop
+3) spleen-masked crop inside the same shared crop
+
+Each view is encoded by the same pretrained EfficientNet backbone.
+Their features, pairwise differences, and attenuation statistics are fused
+in a classification head. Best checkpoint is selected by validation AUC only.
+"

@@ -20,11 +20,14 @@ false_img/
 
 *images/
 *predictions_fixed/
+thesis/
+Spleen_data/
 
 # Ignore image files
 *.jpg
 *.jpeg
 *.png
+*.PNG
 *.gif
 *.bmp
 *.tiff

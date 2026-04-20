@@ -1,0 +1,33 @@
+,value
+dataset_csv,artifacts/liver_spleen_dataset.csv
+features_csv,artifacts/liver_spleen_features.csv
+results_dir,classification/hybrid_densenet_late_fusion/v3_masked_organs
+img_size,288
+batch_size,4
+epochs,28
+lr,0.0002
+backbone_lr_scale,0.18
+weight_decay,0.0008
+folds,5
+max_folds,
+num_workers,2
+seed,42
+patience,8
+dropout,0.3
+label_smoothing,0.01
+aux_tab_weight,0.35
+aux_image_weight,0.15
+debug_max,8
+organ_pad_ratio,0.18
+context_pad_ratio,0.12
+model_blend_weight,0.4
+device,cuda
+comment,"Hybrid liver+spleen classifier for small-data abdominal CT.
+Key design choices:
+- use segmentation-masked liver crop, segmentation-masked spleen crop, and union-masked context crop
+- preserve raw 8-bit intensity ordering instead of per-image histogram re-scaling
+- avoid brightness/contrast augmentation and mixup because attenuation difference is the core signal
+- use a shared DenseNet encoder with late fusion, plus a strong tabular attenuation branch
+- run a fold-wise logistic-regression baseline from the same feature table for direct comparison
+- use class-aware derived groups when no true patient/study id is available
+"

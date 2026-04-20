@@ -21,7 +21,7 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 # -------------------------
-# CONFIG 
+# Main settings
 # -------------------------
 IMAGES_ROOT      = "data/images"
 LABEL_MASKS_ROOT = "data/labelled_fixed"
@@ -39,18 +39,18 @@ THRESH = 0.5
 NUM_GPUS_TO_USE = 1
 KFOLDS = 5
 SEED = 42
-# dropout probability applied inside decoder conv blocks
+# decoder dropout
 DROPOUT_P = 0.0
 
 
-# toggle to save a few augmented samples to RESULTS_DIR/aug_debug for visual check
+# save a few augmented samples if needed
 SAVE_AUG_SAMPLES = False
 AUG_DEBUG_OUT = Path(RESULTS_DIR) / "aug_debug"
 if SAVE_AUG_SAMPLES:
     AUG_DEBUG_OUT.mkdir(parents=True, exist_ok=True)
 
 # -------------------------
-# Albumentations transforms (paired)
+# Image and mask transforms
 # -------------------------
 train_transform = A.Compose([
     A.RandomResizedCrop(size=(IMG_SIZE, IMG_SIZE), scale=(0.9, 1.0), ratio=(0.9, 1.1), p=0.8),
@@ -65,7 +65,7 @@ val_transform = A.Compose([
 ], additional_targets={"mask": "mask"}) 
 
 # -------------------------
-# Run configuration to save parameters
+# Save run settings
 # -------------------------
 RUN_CONFIG = {
     "IMG_SIZE": IMG_SIZE,
@@ -87,7 +87,7 @@ RUN_CONFIG = {
 }
 
 # -------------------------
-# Utilities
+# Helper functions
 # -------------------------
 def center_crop_to(tensor, target_h, target_w):
     """Center-crop a 4D tensor (B,C,H,W) or 3D tensor (C,H,W) to (target_h, target_w)."""
